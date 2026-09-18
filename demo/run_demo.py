@@ -103,11 +103,11 @@ def commit_quorum_block(nodes, entries, proposer_idx=0):
 
 def run_full_demo():
     print_header("SIGIL: POST-QUANTUM DOCUMENT ATTRIBUTION & PROVENANCE SYSTEM")
-    print(f"{C_MAGENTA}Air-Gapped | FIPS 203 ML-KEM-768 | FIPS 204 ML-DSA-65 | Section 63 BSA Admissible{C_RESET}")
+    print(f"{C_MAGENTA}Air-Gapped | FIPS 203 ML-KEM-768 | FIPS 204 ML-DSA-65 | Section 63 BSA Certificate Ready{C_RESET}")
     
     demo_dir = os.path.abspath("demo_data")
     if os.path.exists(demo_dir):
-        shutil.rmtree(demo_dir)
+        shutil.rmtree(demo_dir, ignore_errors=True)
     os.makedirs(demo_dir, exist_ok=True)
 
     wm_seed = b"SIGIL_NATIONAL_DEFENCE_MASTER_SEED_2026"

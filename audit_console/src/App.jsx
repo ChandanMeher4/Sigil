@@ -184,11 +184,11 @@ export default function App() {
 
           <div className="glass-panel">
             <h3 style={{ fontSize: '14px', color: '#fff', marginBottom: '10px' }}>
-              ⚖️ Section 63 BSA Admissibility
+              ⚖️ Section 63 BSA Evidence Certification
             </h3>
             <p style={{ fontSize: '11px', color: '#94a3b8', lineHeight: '1.5' }}>
               All documents distributed via SIGIL are cryptographically bound to the post-quantum Merkle audit tree.
-              The immutable ledger guarantees forensic non-repudiation in court without external certificate authorities.
+              The immutable ledger provides forensic non-repudiation structured for Section 63 BSA judicial review.
             </p>
           </div>
         </div>
@@ -303,7 +303,7 @@ export default function App() {
                       blockHeight: 3,
                       matchScore: '100.0%',
                       p_value: '1.42 x 10^-23',
-                      legalValidity: 'Admissible under Section 63 Bharatiya Sakshya Adhiniyam, 2023',
+                      legalValidity: 'Structured under Section 63 Bharatiya Sakshya Adhiniyam, 2023',
                     });
                   }}
                 >
@@ -321,7 +321,7 @@ export default function App() {
                       blockHeight: 4,
                       matchScore: '100.0%',
                       p_value: '1.42 x 10^-23',
-                      legalValidity: 'Admissible under Section 63 Bharatiya Sakshya Adhiniyam, 2023',
+                      legalValidity: 'Structured under Section 63 Bharatiya Sakshya Adhiniyam, 2023',
                     });
                   }}
                 >

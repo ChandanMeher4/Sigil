@@ -117,7 +117,7 @@ SIGIL alters the fundamental physics of document distribution through four non-n
        │  - Validates Merkle Path to Block Header               │
        │  - Verifies 3-of-4 Validator ML-DSA signatures         │
        │  - Verifies Recipient ML-DSA signature on REQUEST      │
-       │  - Outputs Court-Admissible Forensic Provenance Cert   │
+       │  - Outputs Section 63 BSA Forensic Provenance Cert     │
        └────────────────────────────────────────────────────────┘
 ```
 
@@ -175,7 +175,7 @@ SIGIL mathematically guarantees that at least one colluder is identified with pr
 
 ---
 
-## 6. National Legal Admissibility Framework
+## 6. National Legal Evidentiary Framework (Section 63 BSA)
 
 Under the Indian legal framework, specifically the **Bharatiya Sakshya Adhiniyam, 2023 (BSA)**:
 - **Section 63 (Admissibility of Electronic Records):** Mandates that electronic records must be accompanied by a certificate identifying the electronic record, describing the manner in which it was produced, giving particulars of any device involved, and signed by a person occupying an official responsible position.

@@ -1,6 +1,6 @@
 """Cryptographic Evidence Bundle Builder for SIGIL.
 
-Compiles a self-contained, Section 63 BSA-admissible Evidence Bundle:
+Compiles a self-contained Section 63 BSA Evidence Bundle for judicial review:
 - Leaked document cryptographic hash
 - Recovered watermark bits and correlation stats
 - Accused recipient identity and non-repudiation signature

@@ -396,7 +396,7 @@ export default function App() {
                   BHARATIYA SAKSHYA ADHINIYAM (BSA), 2023
                 </div>
                 <h2 style={{ fontSize: '20px', color: '#fff', margin: '6px 0' }}>
-                  SECTION 63 ADMISSIBILITY CERTIFICATE
+                  SECTION 63 ELECTRONIC EVIDENCE CERTIFICATE
                 </h2>
                 <div style={{ fontSize: '11px', color: '#94a3b8' }}>
                   Certificate of Electronic Provenance &amp; Mathematical Attestation

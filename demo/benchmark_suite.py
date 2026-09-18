@@ -157,7 +157,7 @@ def benchmark_visual_imperceptibility(tmp_dir: str) -> dict:
         "Article 1: Multi-recipient distribution must enforce post-quantum non-repudiation.",
         "Article 2: Variant key custody prevents unauthorized disclosure before ledger commit.",
         "Article 3: Micro-typographic spacing deltas are undetectable to human inspection.",
-        "Article 4: Section 63 BSA evidence bundles provide mathematical court admissibility."
+        "Article 4: Section 63 BSA evidence bundles provide structured electronic evidence certification."
     ]
     y = 90
     for l in lines:

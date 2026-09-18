@@ -96,12 +96,12 @@ flowchart TD
     S --> T["Secure Viewer (React 19 / Bundled PDF.js)"]
     S --> U["Leaked Intercepted Document"]
 
-    subgraph FORENSIC ["Forensic Attribution & Court Admissibility"]
+    subgraph FORENSIC ["Forensic Attribution & Section 63 BSA Evidence Certification"]
         U --> V["Watermark Extractor (Tw Operators & Geometric Fallback)"]
         V --> W["Forensic Accuser (Correlate Against Immutable Ledger Sessions)"]
         W --> X["Compute Hoeffding Bound & Separation Margin"]
-        X --> Y["Generate Section 63 BSA Evidence Bundle (JSON)"]
         Y --> Z["Standalone Zero-Network Offline Verifier (Validates Proofs)"]
+        X --> Y["Generate Section 63 BSA Evidence Bundle (JSON)"]
     end
 ```
 
@@ -205,7 +205,7 @@ If colluders Alice and Bob attempt to create an unattributable hybrid by splicin
 
 ## 7. Section 63 BSA 2023 Compliance & Offline Verifier
 
-To ensure court admissibility under **Section 63 of the Bharatiya Sakshya Adhiniyam, 2023 (BSA 2023)** (Admissibility of Electronic Records), the system bundles forensic evidence into a cryptographically sealed document.
+To support evidentiary submission and judicial evaluation under **Section 63 of the Bharatiya Sakshya Adhiniyam, 2023 (BSA 2023)** (Admissibility of Electronic Records), the system bundles forensic evidence into a cryptographically sealed document.
 
 ### Structure of `EVIDENCE_BUNDLE.json`
 1. **Target Document Metadata:** SHA3-256 hash of the leaked file and extraction parameter manifest.
@@ -226,9 +226,11 @@ Judges, forensic examiners, and defense attorneys can verify evidence bundles on
 [PASS] Step 2: Session entry hash matches canonical payload.
 [PASS] Step 3: Merkle audit inclusion proof verified against block root.
 [PASS] Step 4: Validator quorum signatures verified (3 signatures).
-[PASS] Step 5: Statistical correlation confirmed (24/24 blocks, 100.00% match, Margin: 11 bits).
+[PASS] Step 5: Statistical correlation confirmed (24/24 blocks, 100.00% match, Margin: 15 bits).
        Upper Bound on False Accusation Probability: 6.14e-06.
 ```
+
+> **Note on Separation Margin:** Because each execution generates fresh FIPS 203/204 keypairs and unique session nonces via hardware entropy, the separation margin against simulated innocent recipients is an empirical sample outcome (typically between $+10\text{ to }+18\text{ bits}$ above the runner-up for $M=24$, and $>160\text{ bits}$ at $M=420$ scale), whereas the perfect codeword match ($24/24$, $100.0\%$) and the Hoeffding upper bound ($p \le 6.14 \times 10^{-6}$) are invariant mathematical guarantees.
 
 ---
 
@@ -243,7 +245,7 @@ SIGIL provides two modern, glassmorphic Single Page Applications built with **Re
   - **"Log-Before-Key" 5-Stage Stepper:** Guides user visually through envelope unwrap, key generation, ledger signing, quorum consensus, and Lagrange reconstruction.
   - **Floating Provenance HUD:** Displays committed block height, transaction entry hash, and Merkle root.
   - **Interactive Forensic Lens:** Demonstrates microscopic $+0.750\text{ pt}$ typographic spacing shifts.
-  - **Section 63 BSA Certificate Modal:** One-click generation of court-admissible electronic records.
+  - **Section 63 BSA Certificate Modal:** One-click generation of structured electronic evidence certificates for judicial review.
 
 ### 2. Security & Compliance Audit Console (`http://localhost:8001/console`)
 - **Location:** `audit_console/`
@@ -446,6 +448,6 @@ Open **`http://localhost:8001/console`** in your browser to inspect the live blo
 <div align="center">
 
 **SIGIL** — Post-Quantum Document Attribution & Immutable Decryption Provenance Platform.  
-*Engineered with mathematical rigor, NIST post-quantum cryptography, and Section 63 BSA 2023 court-admissible legal provenance.*
+*Engineered with mathematical rigor, NIST post-quantum cryptography, and provenance evidence structured for Section 63 BSA 2023 review.*
 
 </div>
