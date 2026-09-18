@@ -65,9 +65,9 @@ SIGIL eliminates both attack surfaces by enforcing the cryptographic invariant: 
 ```mermaid
 flowchart TD
     subgraph SENDER ["Air-Gapped Sender Tool"]
-        A[Original PDF Document] --> B[PDF Segmenter]
-        B --> C[Generate Variants A/B (Tw: 0.000 vs +0.750 pt)]
-        C --> D[Encrypt Variants (AES-256-GCM Single-Use Keys)]
+        A["Original PDF Document"] --> B["PDF Segmenter"]
+        B --> C["Generate Variants A/B (Tw: 0.000 vs +0.750 pt)"]
+        C --> D["Encrypt Variants (AES-256-GCM Single-Use Keys)"]
         D --> E["Split Variant Keys: Shamir SSS (t=3, n=4 over F_p)"]
         E --> F["Wrap Shares with Node ML-KEM-768 PKs"]
         F --> G["Wrap Manifest with Recipient ML-KEM-768 PKs"]
@@ -156,14 +156,14 @@ In [watermark_engine/extractor.py](file:///c:/Users/mchan/OneDrive/Desktop/Sigil
    Scans the PDF byte streams for uncompressed/deflated text chunks and extracts `([0-9.]+) Tw` operators. Recovers bits with 100% confidence.
 2. **Strategy 2: Font-Adaptive Geometric Word Gap Measurement (Fallback):**
    If a PDF has been re-saved, flattened, or printed through a virtual driver where raw `Tw` operators were converted into absolute character placements, the extractor measures rendered line bounding boxes (`bbox[2] - bbox[0]`) against natural font metrics:
-   $$\text{BaseSpace}(S) = 0.278 \cdot S$$
-   $$\text{DecisionThreshold}(S) = \text{BaseSpace}(S) + 0.375\text{ pt}$$
-   $$\text{Delta} = \text{AverageMeasuredSpace} - \text{DecisionThreshold}(S)$$
-   $$\text{RecoveredBit} = \begin{cases} 1 & \text{if } \text{Delta} \ge 0 \\ 0 & \text{if } \text{Delta} < 0 \end{cases}$$
+   - Natural Space Baseline: $\text{BaseSpace}(S) = 0.278 \cdot S$
+   - Decision Boundary: $\text{DecisionThreshold}(S) = \text{BaseSpace}(S) + 0.375\text{ pt}$
+   - Residual Delta: $\Delta = \text{AverageMeasuredSpace} - \text{DecisionThreshold}(S)$
+   - Recovered Bit: $\text{Bit} = 1 \text{ if } \Delta \ge 0 \text{ else } 0$
 
 ### 3. Mathematical Proof of PDF.js Compatibility
 Empirically proven in [watermark_engine/tests/test_pdf_survival.py](file:///c:/Users/mchan/OneDrive/Desktop/Sigil/watermark_engine/tests/test_pdf_survival.py):
-PDF.js computes text displacement via $\Delta x = \text{glyph\_width} + Tw$. For every standard font size ($8\text{ pt} - 24\text{ pt}$), the gap displacement between Variant 0 and Variant 1 is exactly $0.750000\text{ pt}$, yielding a perfectly symmetric safety margin of $\pm 0.375000\text{ pt}$ around SIGIL's decision threshold.
+PDF.js computes text displacement via $\Delta x = \text{width} + Tw$. For every standard font size ($8\text{ pt} - 24\text{ pt}$), the gap displacement between Variant 0 and Variant 1 is exactly $0.750000\text{ pt}$, yielding a perfectly symmetric safety margin of $\pm 0.375000\text{ pt}$ around SIGIL's decision threshold.
 
 ---
 
