@@ -40,7 +40,7 @@
 9. [Repository File Map](#9-repository-file-map)
 10. [Step-by-Step Installation & Usage Guide](#10-step-by-step-installation--usage-guide)
 11. [Empirical Benchmark & Hardening Results](#11-empirical-benchmark--hardening-results)
-12. [Judge Q&A Field Guide](#12-judge-qa-field-guide)
+12. [Architectural & Security FAQ](#12-architectural--security-faq)
 
 ---
 
@@ -420,32 +420,30 @@ Open **`http://localhost:8001/console`** in your browser to inspect the live blo
 
 ---
 
-## 12. Judge Q&A Field Guide
+## 12. Architectural & Security FAQ
 
-During hackathon presentations, judges probe technical nuances. Below are the definitive, mathematically grounded answers:
-
-#### Q1: "Why does your evidence bundle say 'deterministic cryptographic certainty' on signatures and Merkle proofs, but 'high statistical confidence' on watermark attribution?"
+### Q1: Why are digital signatures and Merkle proofs verified deterministically, while watermark attribution is reported with a statistical bound?
 > **Answer:**  
-> *"That distinction is intentional and mathematically exact. The provenance chain is deterministic: Alice's ML-DSA-65 signature on the request, the Merkle audit inclusion path, and the quorum block signatures either pass or fail with 100% cryptographic certainty.  
-> The watermark attribution is an information-theoretic correlation over physical word-spacing deltas. By Hoeffding's inequality, an innocent recipient matching 24 random binary blocks has probability $p = 6.14 \times 10^{-6}$ (1 in 162,754). At 420 blocks, as empirically verified in our benchmark suite, this drops to $p < 10^{-90}$. We never conflate statistical correlation with deterministic algebra — and that honesty is what makes our evidence legally admissible under Section 63 of BSA 2023."*
+> This distinction is deliberate and mathematically necessary. The custody and provenance chain is purely deterministic: a recipient's NIST FIPS 204 ML-DSA-65 signature on the decryption request, the binary Merkle audit inclusion path, and the $\ge 3$-of-$4$ validator quorum block signatures either verify cryptographically or fail.  
+> Watermark leak attribution, by contrast, is an information-theoretic measurement over a physical steganographic channel (micro-typographic spacing shifts). Under the null hypothesis of innocence, an unassociated recipient's pseudo-random codeword has probability $q = 0.5$ of matching each block. By Hoeffding's Inequality, an innocent recipient matching 24 blocks has an upper-bound false-accusation probability of $p = 6.14 \times 10^{-6}$ (1 in 162,754). At 420 blocks, this scales below $10^{-90}$. Conflating statistical correlation with deterministic algebra would be scientifically unsound; distinguishing the two is precisely what guarantees legal admissibility under Section 63 of Bharatiya Sakshya Adhiniyam, 2023.
 
-#### Q2: "Why did you choose $p = 2^{256} + 297$ for Shamir Secret Sharing instead of an arbitrary 256-bit prime?"
+### Q2: Why is the prime $p = 2^{256} + 297$ chosen for Shamir Secret Sharing instead of an arbitrary 256-bit prime?
 > **Answer:**  
-> *"Because $2^{256} + 297$ is the smallest prime strictly **greater** than $2^{256}$. Every 256-bit AES-GCM key $k \in [0, 2^{256}-1]$ satisfies $k < p$. This guarantees that any random 32-byte AES key can be embedded directly into $\mathbb{F}_p$ without modulo wrap-around, key collisions, or rejection sampling."*
+> $p = 2^{256} + 297$ is the smallest prime strictly **greater** than $2^{256}$. In threshold cryptography, every secret must be a valid field element ($S < p$). Because all 256-bit AES-GCM keys satisfy $0 \le k < 2^{256}$, every possible 32-byte symmetric key is strictly less than $p$. This eliminates the need for rejection sampling, avoids modulo wrap-around (which would cause key collisions), and preserves full 256-bit entropy across all Shamir shares.
 
-#### Q3: "What prevents a malicious user from modifying the client daemon to save the PDF without watermarks?"
+### Q3: What prevents a compromised recipient host or rogue client daemon from saving documents without watermarks?
 > **Answer:**  
-> *"The recipient client never receives unmarked content. The document container contains two pre-rendered ciphertexts ($A$ and $B$) for each block. The decryption keys for variant $A$ and variant $B$ are distinct and held under threshold custody by the validators. The validators will only release the key for the variant dictated by the committed transaction hash. The client never possesses the alternative keys and cannot generate an unmarked document."*
+> The recipient host never possesses or receives unmarked plaintext. The document package partitions text into sequential blocks, each pre-rendered into two distinct micro-typographic variants ($A$ and $B$) encrypted under independent single-use AES-256-GCM keys. The variant keys are held under threshold custody across the distributed validator quorum. The validators release only the specific Shamir shares dictated by the session codeword $c = \text{HMAC-SHA3-256}(K_{wm}, h_{\text{entry}})$, which is permanently committed to the immutable ledger. Because the client never receives the alternative keys, it is mathematically incapable of reconstructing an unwatermarked document.
 
-#### Q4: "What if two recipients collude and splice pages together to confuse the detector?"
+### Q4: How does the attribution engine defend against multi-party collusion and cut-and-paste document splicing?
 > **Answer:**  
-> *"Our accuser correlates bitwise across all segments. If Alice and Bob splice 50% of their pages together, Alice will match ~75% of the overall bits and Bob will match ~75%. Both suspects separate significantly from innocent recipients (who match ~50%), allowing the accuser to identify both colluders simultaneously, as demonstrated in Phase 8 of our live demo."*
+> The forensic detector performs bitwise correlation tracking across all segmented blocks. If colluders Alice and Bob assemble a composite document by interweaving pages or paragraphs, both suspects will exhibit substantial, above-chance correlation ($\sim 75\%$ for a $50/50$ split, compared to the $\sim 50\%$ baseline for innocent non-colluders). This enables the forensic engine to identify and unmask both colluding parties simultaneously.
 
 ---
 
 <div align="center">
 
-**SIGIL** — Built for Smart India Hackathon 2024–2026.  
-*Engineered with mathematical rigor, post-quantum cryptography, and verifiable legal admissibility.*
+**SIGIL** — Post-Quantum Document Attribution & Immutable Decryption Provenance Platform.  
+*Engineered with mathematical rigor, NIST post-quantum cryptography, and Section 63 BSA 2023 court-admissible legal provenance.*
 
 </div>
