@@ -11,13 +11,13 @@
   ╚══════╝╚═╝ ╚═════╝ ╚═╝╚══════╝
 ```
 
-### Post-Quantum Document Attribution, Immutable Decryption Provenance, and Section 63 BSA Court-Admissible Forensic Verification
+### Post-Quantum Document Attribution, Immutable Decryption Provenance, and Section 63 BSA Forensic Electronic Evidence Certification
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![NIST FIPS 203](https://img.shields.io/badge/NIST%20FIPS%20203-ML--KEM--768-success.svg)](https://csrc.nist.gov/pubs/fips/203/final)
 [![NIST FIPS 204](https://img.shields.io/badge/NIST%20FIPS%20204-ML--DSA--65-success.svg)](https://csrc.nist.gov/pubs/fips/204/final)
 [![Tests: 24/24 Passing](https://img.shields.io/badge/tests-24%2F24%20passing-brightgreen.svg)](file:///c:/Users/mchan/OneDrive/Desktop/Sigil/crypto/tests)
-[![Legal Compliance](https://img.shields.io/badge/BSA%202023-Section%2063%20Admissible-gold.svg)](https://www.indiacode.nic.in/)
+[![Legal Compliance](https://img.shields.io/badge/BSA%202023-Section%2063%20Certificate-gold.svg)](https://www.indiacode.nic.in/)
 [![BFT Quorum](https://img.shields.io/badge/PQ--BFT-f%3D1%20Fault%20Tolerant-blueviolet.svg)](file:///c:/Users/mchan/OneDrive/Desktop/Sigil/validator_node)
 
 **Smart India Hackathon Problem Statement SIH26237**  
@@ -45,6 +45,8 @@
 ---
 
 ## 1. Executive Summary & The "No Log, No Key" Invariant
+
+> **The Core Architectural Insight:** The recipient host never possesses or receives unmarked plaintext. Documents are partitioned into text blocks, each pre-rendered into dual micro-typographic variants ($A$ and $B$) encrypted under independent single-use AES-256-GCM keys held in threshold custody across a distributed validator quorum. The quorum releases only the specific Shamir shares dictated by the session codeword $c = \text{HMAC-SHA3-256}(K_{wm}, h_{\text{entry}})$, which is permanently committed to the immutable ledger. Because a client host never receives the alternative keys, it is mathematically incapable of reconstructing or saving an unwatermarked document.
 
 Traditional document distribution systems suffer from a fatal security gap: once an authorized recipient receives decryption keys, they can decrypt the plaintext, leak it anonymously, and claim repudiation. Existing watermarking solutions either:
 - Rely on client-side software agents that can be decompiled or patched to bypass watermarking, or
@@ -224,7 +226,7 @@ Judges, forensic examiners, and defense attorneys can verify evidence bundles on
 [PASS] Step 2: Session entry hash matches canonical payload.
 [PASS] Step 3: Merkle audit inclusion proof verified against block root.
 [PASS] Step 4: Validator quorum signatures verified (3 signatures).
-[PASS] Step 5: Statistical correlation confirmed (24/24 blocks, 100.00% match, Margin: 14 bits).
+[PASS] Step 5: Statistical correlation confirmed (24/24 blocks, 100.00% match, Margin: 11 bits).
        Upper Bound on False Accusation Probability: 6.14e-06.
 ```
 
@@ -425,7 +427,7 @@ Open **`http://localhost:8001/console`** in your browser to inspect the live blo
 ### Q1: Why are digital signatures and Merkle proofs verified deterministically, while watermark attribution is reported with a statistical bound?
 > **Answer:**  
 > This distinction is deliberate and mathematically necessary. The custody and provenance chain is purely deterministic: a recipient's NIST FIPS 204 ML-DSA-65 signature on the decryption request, the binary Merkle audit inclusion path, and the $\ge 3$-of-$4$ validator quorum block signatures either verify cryptographically or fail.  
-> Watermark leak attribution, by contrast, is an information-theoretic measurement over a physical steganographic channel (micro-typographic spacing shifts). Under the null hypothesis of innocence, an unassociated recipient's pseudo-random codeword has probability $q = 0.5$ of matching each block. By Hoeffding's Inequality, an innocent recipient matching 24 blocks has an upper-bound false-accusation probability of $p = 6.14 \times 10^{-6}$ (1 in 162,754). At 420 blocks, this scales below $10^{-90}$. Conflating statistical correlation with deterministic algebra would be scientifically unsound; distinguishing the two is precisely what guarantees legal admissibility under Section 63 of Bharatiya Sakshya Adhiniyam, 2023.
+> Watermark leak attribution, by contrast, is an information-theoretic measurement over a physical steganographic channel (micro-typographic spacing shifts). Under the null hypothesis of innocence, an unassociated recipient's pseudo-random codeword has probability $q = 0.5$ of matching each block. By Hoeffding's Inequality, an innocent recipient matching 24 blocks has an upper-bound false-accusation probability of $p = 6.14 \times 10^{-6}$ (1 in 162,754). At 420 blocks, this scales below $10^{-90}$. Conflating statistical correlation with deterministic algebra would be scientifically unsound; distinguishing the two is what allows the evidence bundle to honestly support a Section 63 BSA certificate — the certificate itself is a structured legal instrument for a court to weigh, not an automatic grant of admissibility.
 
 ### Q2: Why is the prime $p = 2^{256} + 297$ chosen for Shamir Secret Sharing instead of an arbitrary 256-bit prime?
 > **Answer:**  
