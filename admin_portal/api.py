@@ -420,6 +420,8 @@ async def admin_forensic_leak_attribution(
             resolved_total_blocks = 24
 
         wm_seed = os.environ.get("SIGIL_WM_SEED", "SIGIL_WATERMARK_MASTER_SEED_2026")
+        if isinstance(wm_seed, str):
+            wm_seed = wm_seed.encode("utf-8")
         accuser = ForensicAccuser(ledger=ledger, wm_master_seed=wm_seed)
 
         res = accuser.accuse_leaked_document(
