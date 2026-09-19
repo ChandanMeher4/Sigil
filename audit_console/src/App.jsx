@@ -393,24 +393,65 @@ export default function App() {
               </div>
 
               {forensicResult && (
-                <div style={{ background: '#070b14', border: '1px solid var(--border-emerald)', borderRadius: '10px', padding: '20px' }}>
+                <div
+                  style={{
+                    background: '#070b14',
+                    border: `1px solid ${forensicResult.status === 'NO_WATERMARK_DETECTED' ? 'var(--border-rose)' : 'var(--border-emerald)'}`,
+                    borderRadius: '10px',
+                    padding: '20px',
+                  }}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontSize: '24px' }}>🎯</span>
+                      <span style={{ fontSize: '24px' }}>{forensicResult.status === 'NO_WATERMARK_DETECTED' ? '⚠️' : '🎯'}</span>
                       <div>
-                        <h4 style={{ color: '#34d399', fontSize: '16px' }}>LIVE FORENSIC ATTRIBUTION CONFIRMED</h4>
+                        <h4
+                          style={{
+                            color: forensicResult.status === 'NO_WATERMARK_DETECTED' ? '#fb7185' : '#34d399',
+                            fontSize: '16px',
+                          }}
+                        >
+                          {forensicResult.status === 'NO_WATERMARK_DETECTED'
+                            ? 'NO CRYPTOGRAPHIC WATERMARK DETECTED'
+                            : 'LIVE FORENSIC ATTRIBUTION CONFIRMED'}
+                        </h4>
                         <div style={{ fontSize: '11px', color: '#94a3b8' }}>
                           Analyzed File: <code>{forensicResult.file_analyzed || customPdfPath}</code>
                         </div>
                       </div>
                     </div>
-                    <span className="status-pill pill-emerald">LIVE PYMUPDF EXTRACTION</span>
+                    <span className={`status-pill ${forensicResult.status === 'NO_WATERMARK_DETECTED' ? 'pill-rose' : 'pill-emerald'}`}>
+                      {forensicResult.status === 'NO_WATERMARK_DETECTED' ? 'UNTRACKED / UNMARKED DOCUMENT' : 'LIVE PYMUPDF EXTRACTION'}
+                    </span>
                   </div>
+
+                  {forensicResult.verdict && (
+                    <div
+                      style={{
+                        background: forensicResult.status === 'NO_WATERMARK_DETECTED' ? 'rgba(244,63,94,0.1)' : 'rgba(16,185,129,0.1)',
+                        border: `1px solid ${forensicResult.status === 'NO_WATERMARK_DETECTED' ? 'rgba(244,63,94,0.3)' : 'rgba(16,185,129,0.3)'}`,
+                        borderRadius: '8px',
+                        padding: '10px 14px',
+                        fontSize: '12px',
+                        color: forensicResult.status === 'NO_WATERMARK_DETECTED' ? '#fda4af' : '#a7f3d0',
+                        marginBottom: '16px',
+                      }}
+                    >
+                      <strong>Forensic Verdict:</strong> {forensicResult.verdict}
+                    </div>
+                  )}
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', fontSize: '12px', marginBottom: '16px' }}>
                     <div style={{ background: '#0e1526', padding: '12px', borderRadius: '8px' }}>
                       <span style={{ color: '#64748b' }}>Identified Source:</span>
-                      <div style={{ color: '#fff', fontWeight: 600, fontSize: '14px', marginTop: '2px' }}>
+                      <div
+                        style={{
+                          color: forensicResult.status === 'NO_WATERMARK_DETECTED' ? '#fb7185' : '#fff',
+                          fontWeight: 600,
+                          fontSize: '14px',
+                          marginTop: '2px',
+                        }}
+                      >
                         {forensicResult.culprit}
                       </div>
                     </div>
@@ -418,7 +459,7 @@ export default function App() {
                     <div style={{ background: '#0e1526', padding: '12px', borderRadius: '8px' }}>
                       <span style={{ color: '#64748b' }}>Codeword Correlation:</span>
                       <div style={{ color: '#38bdf8', fontWeight: 600, fontSize: '14px', marginTop: '2px' }}>
-                        {forensicResult.matchScore} Match
+                        {forensicResult.matchScore}
                       </div>
                     </div>
 
@@ -430,9 +471,9 @@ export default function App() {
                     </div>
 
                     <div style={{ background: '#0e1526', padding: '12px', borderRadius: '8px' }}>
-                      <span style={{ color: '#64748b' }}>Separation Margin &amp; Ledger Session:</span>
+                      <span style={{ color: '#64748b' }}>Separation Margin &amp; Legal Admissibility:</span>
                       <div style={{ color: '#fff', fontFamily: 'ui-monospace, monospace', fontSize: '11px', marginTop: '2px' }}>
-                        Margin: {forensicResult.separation_margin || 'N/A'} | Entry: {forensicResult.sessionEntryHash ? forensicResult.sessionEntryHash.slice(0, 12) + '...' : 'N/A'}
+                        Margin: {forensicResult.separation_margin || 'N/A'} | {forensicResult.legalValidity}
                       </div>
                     </div>
                   </div>

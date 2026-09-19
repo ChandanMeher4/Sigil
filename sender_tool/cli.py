@@ -98,6 +98,17 @@ def main():
             sh_res = json.loads(resp.read().decode("utf-8"))
             print(f"[+] Key shares deposited in quorum custody: {sh_res['total_shares_stored']} shares stored.")
 
+        # Also store shares into sibling node databases if present on disk
+        for idx in range(2, 5):
+            p_db = f"data/node_0{idx}/sigil_ledger.db"
+            if os.path.exists(p_db) and idx in node_shares:
+                try:
+                    from validator_node.ledger import Ledger
+                    p_ledger = Ledger(p_db, node_id=f"NODE_0{idx}")
+                    p_ledger.store_key_shares(args.doc_id, node_shares[idx])
+                except Exception:
+                    pass
+
         print(f"\n[SUCCESS] Document '{args.doc_id}' distributed under two-lock broadcast model!")
 
 

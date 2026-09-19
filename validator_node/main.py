@@ -339,10 +339,47 @@ def attribute_leak(req: AttributeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Forensic extraction error: {str(e)}")
 
+    # Statistical significance gating:
+    # A watermark attribution is only valid if:
+    # 1. False accusation probability p < 0.01 (less than 1% chance of error)
+    # 2. Correlation match >= 75%
+    # 3. Separation margin >= 3 bits (above random baseline noise)
+    is_significant = (
+        res.false_accusation_probability < 0.01 and
+        res.top_candidate.match_percentage >= 75.0 and
+        res.separation_margin_bits >= 3
+    )
+
+    if not is_significant:
+        return {
+            "status": "NO_WATERMARK_DETECTED",
+            "file_analyzed": target_path,
+            "culprit": "NONE (Unmarked / Untracked Document)",
+            "verdict": f"INCONCLUSIVE: Correlation {res.top_candidate.match_percentage:.1f}% falls within random noise (p = {res.false_accusation_probability:.2e} > 0.01 threshold). This document was either never encrypted/watermarked via SIGIL or is an untracked original.",
+            "sessionEntryHash": res.top_candidate.session_entry_hash,
+            "blockHeight": res.top_candidate.block_height,
+            "matchScore": f"{res.top_candidate.match_percentage:.1f}% ({res.top_candidate.match_count}/{res.top_candidate.total_blocks}) — Random Baseline Noise",
+            "p_value": f"{res.false_accusation_probability:.2e} (Fails p < 0.01 Significance Threshold)",
+            "separation_margin": f"{res.separation_margin_bits} bits (Fails >= 3 bits threshold)",
+            "leaked_file_hash": res.leaked_file_hash,
+            "all_candidates": [
+                {
+                    "recipient_id": c.recipient_id,
+                    "matches": c.match_count,
+                    "total_blocks": c.total_blocks,
+                    "match_percentage": round(c.match_percentage, 1),
+                    "block_height": c.block_height
+                }
+                for c in res.all_candidate_scores
+            ],
+            "legalValidity": "Inadmissible: Document shows no cryptographic watermark under Section 63 BSA"
+        }
+
     return {
         "status": "ATTRIBUTED",
         "file_analyzed": target_path,
         "culprit": f"{res.top_candidate.recipient_id}",
+        "verdict": f"CONFIRMED: Statistically significant watermark isolated to {res.top_candidate.recipient_id} with separation margin {res.separation_margin_bits} bits.",
         "sessionEntryHash": res.top_candidate.session_entry_hash,
         "blockHeight": res.top_candidate.block_height,
         "matchScore": f"{res.top_candidate.match_percentage:.1f}% ({res.top_candidate.match_count}/{res.top_candidate.total_blocks})",
