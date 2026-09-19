@@ -306,3 +306,143 @@ def download_sigil_file(doc_id: str, officer: Dict[str, Any] = Depends(get_curre
         filename=f"{doc_id}.sigil",
         media_type="application/octet-stream"
     )
+
+
+@app.get("/api/admin/recipients")
+def list_enrolled_recipients(officer: Dict[str, Any] = Depends(get_current_officer)):
+    """List enrolled officer identities available for document distribution."""
+    known_recipients = {
+        "OFFICER_ALICE": "Special Operations Lead",
+        "OFFICER_BOB": "Intelligence Analyst",
+        "OFFICER_CHARLIE": "Logistics & Supply Director",
+        "OFFICER_DAVE": "Communications & Cyber Defense"
+    }
+    
+    # Check client keys directory on disk
+    client_keys_dir = "data/client_keys"
+    if os.path.exists(client_keys_dir):
+        for fname in os.listdir(client_keys_dir):
+            if fname.endswith("_kem_pk.bin"):
+                r_id = fname.replace("_kem_pk.bin", "")
+                if r_id not in known_recipients:
+                    known_recipients[r_id] = "Field Officer"
+
+    return {
+        "recipients": [
+            {
+                "id": r_id,
+                "label": r_id.replace("_", " "),
+                "role": role,
+                "has_pqc_key": True
+            }
+            for r_id, role in known_recipients.items()
+        ]
+    }
+
+
+@app.get("/api/admin/documents")
+def list_distributed_documents(officer: Dict[str, Any] = Depends(get_current_officer)):
+    """List previously distributed .sigil containers."""
+    documents = []
+    if os.path.exists(DISTRIBUTED_DIR):
+        for fname in os.listdir(DISTRIBUTED_DIR):
+            if fname.endswith(".sigil"):
+                fpath = os.path.join(DISTRIBUTED_DIR, fname)
+                st = os.stat(fpath)
+                doc_id = fname[:-6]
+                documents.append({
+                    "doc_id": doc_id,
+                    "filename": fname,
+                    "size_bytes": st.st_size,
+                    "created_at": st.st_mtime,
+                    "download_url": f"/api/admin/download/{doc_id}"
+                })
+
+    documents.sort(key=lambda d: d["created_at"], reverse=True)
+    return {"documents": documents}
+
+
+@app.post("/api/admin/forensics/upload_and_attribute")
+async def admin_forensic_leak_attribution(
+    pdf_file: UploadFile = File(...),
+    doc_id: Optional[str] = Form(None),
+    total_blocks: Optional[int] = Form(None),
+    lines_per_block: int = Form(3),
+    officer: Dict[str, Any] = Depends(get_current_officer)
+):
+    """Run forensic leak attribution on suspect leaked PDF file."""
+    from forensic_lab.accuse import ForensicAccuser
+    from validator_node.ledger import Ledger
+    from validator_node.main import _format_forensic_result
+
+    suffix = os.path.splitext(pdf_file.filename)[1] or ".pdf"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_pdf:
+        shutil.copyfileobj(pdf_file.file, tmp_pdf)
+        tmp_pdf_path = tmp_pdf.name
+
+    try:
+        # Locate active ledger database
+        db_candidates = [
+            os.environ.get("SIGIL_DB_PATH"),
+            "data/node_01_ledger.db",
+            "data/ledger.db",
+            "data/cluster/node_01_ledger.db"
+        ]
+        db_path = "data/ledger.db"
+        for cand in db_candidates:
+            if cand and os.path.exists(cand):
+                db_path = cand
+                break
+
+        ledger = Ledger(db_path=db_path)
+        resolved_doc_id = doc_id.strip() if doc_id and doc_id.strip() else None
+        resolved_total_blocks = total_blocks
+
+        # Resolve latest doc_id and total_blocks from ledger manifests if not specified
+        with ledger._get_conn() as conn:
+            cur = conn.cursor()
+            if resolved_doc_id:
+                cur.execute("SELECT total_blocks FROM manifests WHERE doc_id = ?;", (resolved_doc_id,))
+                row = cur.fetchone()
+                if row and not resolved_total_blocks:
+                    resolved_total_blocks = row["total_blocks"]
+            else:
+                cur.execute("SELECT doc_id, total_blocks FROM manifests ORDER BY rowid DESC LIMIT 1;")
+                row = cur.fetchone()
+                if row:
+                    resolved_doc_id = row["doc_id"]
+                    if not resolved_total_blocks:
+                        resolved_total_blocks = row["total_blocks"]
+
+        if not resolved_doc_id:
+            resolved_doc_id = "DEFENCE_DIRECTIVE_2026"
+        if not resolved_total_blocks:
+            resolved_total_blocks = 24
+
+        wm_seed = os.environ.get("SIGIL_WM_SEED", "SIGIL_WATERMARK_MASTER_SEED_2026")
+        accuser = ForensicAccuser(ledger=ledger, wm_master_seed=wm_seed)
+
+        res = accuser.accuse_leaked_document(
+            tmp_pdf_path,
+            doc_id=resolved_doc_id,
+            total_blocks=resolved_total_blocks,
+            lines_per_block=lines_per_block
+        )
+        return _format_forensic_result(res, pdf_file.filename)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Forensic attribution error: {str(e)}")
+    finally:
+        if os.path.exists(tmp_pdf_path):
+            try:
+                os.remove(tmp_pdf_path)
+            except Exception:
+                pass
+
+
+# Mount static frontend bundle if built
+frontend_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
+if os.path.exists(frontend_dist):
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
+

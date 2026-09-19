@@ -61,3 +61,81 @@ def test_security_officer_login_and_authenticated_flow(client):
     # 5. Revoked token rejected
     subsequent_res = client.get("/api/admin/cluster", headers=headers)
     assert subsequent_res.status_code == 401
+
+
+def test_enrolled_recipients_endpoint(client):
+    """Verify listing enrolled recipient identities with authentication."""
+    # Login first
+    login_res = client.post("/api/admin/login", json={
+        "username": DEFAULT_ADMIN_USER,
+        "password": DEFAULT_ADMIN_PASS
+    })
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    res = client.get("/api/admin/recipients", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert "recipients" in data
+    assert len(data["recipients"]) >= 4
+    recipient_ids = [r["id"] for r in data["recipients"]]
+    assert "OFFICER_ALICE" in recipient_ids
+    assert "OFFICER_BOB" in recipient_ids
+
+
+def test_distributed_documents_catalog_endpoint(client):
+    """Verify querying distributed document catalog."""
+    login_res = client.post("/api/admin/login", json={
+        "username": DEFAULT_ADMIN_USER,
+        "password": DEFAULT_ADMIN_PASS
+    })
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    res = client.get("/api/admin/documents", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert "documents" in data
+    assert isinstance(data["documents"], list)
+
+
+def test_forensic_upload_and_attribute_endpoint(client, tmp_path):
+    """Verify multipart PDF upload for forensic attribution."""
+    import fitz
+
+    # Create dummy single-page PDF
+    pdf_path = tmp_path / "suspect.pdf"
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "CONFIDENTIAL INTELLIGENCE DIRECTIVE")
+    doc.save(str(pdf_path))
+    doc.close()
+
+    login_res = client.post("/api/admin/login", json={
+        "username": DEFAULT_ADMIN_USER,
+        "password": DEFAULT_ADMIN_PASS
+    })
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    with open(str(pdf_path), "rb") as f:
+        res = client.post(
+            "/api/admin/forensics/upload_and_attribute",
+            headers=headers,
+            files={"pdf_file": ("suspect.pdf", f, "application/pdf")},
+            data={"lines_per_block": 1}
+        )
+    assert res.status_code == 200
+    data = res.json()
+    assert "status" in data
+    assert "verdict" in data
+
+
+def test_static_frontend_dashboard_served(client):
+    """Verify that FastAPI mounts and serves the React dashboard index.html."""
+    res = client.get("/")
+    assert res.status_code == 200
+    assert "SIGIL // Security Officer Command Console" in res.text
+    assert "root" in res.text
+
+
