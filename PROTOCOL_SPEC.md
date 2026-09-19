@@ -197,12 +197,12 @@ Output by `forensic_lab` and verified by `offline_verifier`:
   },
   "attribution": {
     "accused_recipient_id": "RECIPIENT_ALICE_01",
-    "matching_score": 309,
+    "matching_score": 420,
     "total_blocks": 420,
-    "match_percentage": 73.57,
-    "innocent_highest_score": 225,
-    "separation_margin_bits": 84,
-    "false_accusation_probability_bound": "< 1e-20"
+    "match_percentage": 100.0,
+    "innocent_highest_score": 239,
+    "separation_margin_bits": 181,
+    "false_accusation_probability_bound": "6.28e-92"
   },
   "session_provenance": {
     "session_entry_hash": "<hex_hash>",

@@ -383,6 +383,20 @@ python demo/run_demo.py
 
 ---
 
+### Testing on Your Own Custom PDF Files (N Recipients & Leak Attribution)
+You can distribute any custom PDF file to 10 (or any number of) recipients and test leak identification:
+```powershell
+$env:PYTHONPATH="."
+# 1. Distribute your custom PDF to 10 recipients and simulate Recipient 7 leaking it:
+python demo/run_custom_distribution.py --pdf "path/to/your_document.pdf" --num-recipients 10 --leaker 7
+
+# 2. Or run without --pdf to test the built-in 3-page classified directive across 10 recipients:
+python demo/run_custom_distribution.py --num-recipients 10 --leaker 7
+```
+All decrypted PDFs will be written to `custom_test_output/`, the forensic accuser will unmask the leaker among all 10 candidates with exact Hoeffding bounds, and the Section 63 BSA evidence bundle will be verified offline.
+
+---
+
 ### Running Web User Interfaces
 
 #### 1. Start Recipient Client Daemon (Port 5001)

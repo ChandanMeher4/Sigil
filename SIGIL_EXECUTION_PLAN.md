@@ -94,7 +94,6 @@ A recipient cannot obtain a readable document without a signed, committed ledger
 | Layer | Component / Technology | Exact Version / Spec | Technical Justification |
 |---|---|---|---|
 | **PQC Primitives** | `kyber_py.ml_kem` / `dilithium_py.ml_dsa` | Verified NIST FIPS 203 & 204 (Final) | Pure Python, zero native DLL headaches on Windows. Verified against NIST ACVP-Server KAT vectors (Release 1.1.0.35). ML-KEM-768 (1,184B PK, 1,088B CT, 32B SS) and ML-DSA-65 (1,952B PK, 3,309B signature). Abstracted behind `crypto/pqc.py` interface for seamless drop-in of liboqs/C bindings. |
-| **Long-Term Roots** | SLH-DSA-128s | NIST FIPS 205 (SPMX-128s) | Stateless hash-based root anchor for validator genesis certificates and software release verification. |
 | **Content Encryption** | AES-256-GCM | `cryptography.hazmat` (Python 3.11+) | Authenticated encryption with associated data (AEAD). Unique nonce and key per variant block. |
 | **Secret Sharing** | Hand-rolled Shamir SSS | $\mathbb{F}_p$ with $p = 2^{256} + 297$ | Smallest prime strictly $> 2^{256}$. Every 256-bit AES key embeds into $\mathbb{F}_p$ with zero truncation, zero collision, and zero rejection sampling. Information-theoretically secure. |
 | **Merkle Log Proofs** | Hand-rolled Binary Merkle Tree | SHA3-256 Leaf & Node hashing | ~60 lines of clean Python. Generates audit proofs matching RFC 9162 principles. |

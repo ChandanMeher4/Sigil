@@ -53,3 +53,4 @@ test_*.pdf
 leaked_*.pdf
 recovered_*.pdf
 scratch/
+custom_test_output/
