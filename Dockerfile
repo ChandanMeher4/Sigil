@@ -22,6 +22,7 @@ COPY validator_node/ ./validator_node/
 COPY sender_tool/ ./sender_tool/
 COPY recipient_client/ ./recipient_client/
 COPY audit_console/ ./audit_console/
+COPY admin_portal/ ./admin_portal/
 COPY config/ ./config/
 
 ENV PYTHONPATH=/app

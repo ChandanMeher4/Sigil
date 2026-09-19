@@ -16,9 +16,10 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![NIST FIPS 203](https://img.shields.io/badge/NIST%20FIPS%20203-ML--KEM--768-success.svg)](https://csrc.nist.gov/pubs/fips/203/final)
 [![NIST FIPS 204](https://img.shields.io/badge/NIST%20FIPS%20204-ML--DSA--65-success.svg)](https://csrc.nist.gov/pubs/fips/204/final)
-[![Tests: 24/24 Passing](https://img.shields.io/badge/tests-24%2F24%20passing-brightgreen.svg)](file:///c:/Users/mchan/OneDrive/Desktop/Sigil/crypto/tests)
+[![Tests: 48/48 Passing](https://img.shields.io/badge/tests-48%2F48%20passing-brightgreen.svg)](file:///c:/Users/mchan/OneDrive/Desktop/Sigil)
 [![Legal Compliance](https://img.shields.io/badge/BSA%202023-Section%2063%20Certificate-gold.svg)](https://www.indiacode.nic.in/)
 [![BFT Quorum](https://img.shields.io/badge/PQ--BFT-f%3D1%20Fault%20Tolerant-blueviolet.svg)](file:///c:/Users/mchan/OneDrive/Desktop/Sigil/validator_node)
+[![Zero-Cost](https://img.shields.io/badge/License-Zero--Cost%20Open%20Source-teal.svg)](file:///c:/Users/mchan/OneDrive/Desktop/Sigil)
 
 **Smart India Hackathon Problem Statement SIH26237**  
 *Cryptographic Attribution and Immutable Decryption Provenance for Multi-Recipient Encrypted Document Distribution*
@@ -236,24 +237,38 @@ Judges, forensic examiners, and defense attorneys can verify evidence bundles on
 
 ## 8. Web User Interfaces
 
-SIGIL provides two modern, glassmorphic Single Page Applications built with **React 19 and Vite**:
+SIGIL provides three unified, defense-grade applications:
 
-### 1. Recipient Client Portal (`http://localhost:5001/`)
+### 1. Security Officer Command Console (`http://localhost:8000/`)
+- **Location:** `admin_portal/` (FastAPI backend + React 19 / Vite frontend)
+- **Design System:** Bespoke obsidian defense aesthetic (`#0b0f19` dark canvas, cyan `#00e5ff` accents, glassmorphic cards, zero generic templates).
+- **Core Operations:**
+  - **Live 4-Node BFT Cluster Health:** Real-time polling (3.5s interval) displaying node status, consensus index, live block heights, and cryptographic ledger hash parity across all peers.
+  - **Drag-and-Drop Document Distribution:** Security officers drag any classified PDF, select enrolled officer identities via interactive badge chips, and execute 1-click PQC packaging and threshold Shamir deposit over HTTP.
+  - **Visual Traitor Attribution Lab:** Upload any leaked PDF or document snippet intercepted in the wild. The lab calculates bitwise correlation across all enrolled personnel, plots suspect likelihoods in a high-visibility chart, isolates the traitor with Hoeffding confidence bounds ($P_{fa} \le 10^{-5}$), and prints the Section 63 BSA legal admissibility certificate.
+  - **Document Catalog:** View distributed directives, recipient counts, block sizes, and download `.sigil` containers.
+
+### 2. Native Windows DRM Recipient Desktop Reader (`SigilReader.exe`)
+- **Location:** `desktop/sigil_reader.py` / `desktop/dist/SigilReader/`
+- **Features:**
+  - **Hardware Screen Capture Shield:** Invokes the Windows Win32 API `SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE = 0x11)`. All external screen recording tools (OBS Studio, Snipping Tool, Zoom, Teams, PrintScreen) record a solid black rectangle.
+  - **Passphrase-Protected PQC Key Storage:** Recipient ML-KEM/ML-DSA keys at rest are protected with PBKDF2-HMAC-SHA256 (100,000 rounds) and AES-256-GCM.
+  - **Native `.sigil` Container Shell Association:** Double-clicking any `.sigil` file opens the document directly in the secured viewer.
+
+### 3. Recipient Client Web Portal (`http://localhost:5001/`)
 - **Location:** `recipient_client/viewer/`
 - **Features:**
   - Real-time cryptographic identity card: Recipient ID (`ALICE`), public key fingerprints, and daemon status.
   - **"Log-Before-Key" 5-Stage Stepper:** Guides user visually through envelope unwrap, key generation, ledger signing, quorum consensus, and Lagrange reconstruction.
   - **Floating Provenance HUD:** Displays committed block height, transaction entry hash, and Merkle root.
   - **Interactive Forensic Lens:** Demonstrates microscopic $+0.750\text{ pt}$ typographic spacing shifts.
-  - **Section 63 BSA Certificate Modal:** One-click generation of structured electronic evidence certificates for judicial review.
 
-### 2. Security & Compliance Audit Console (`http://localhost:8001/console`)
+### 4. Validator Cluster Audit Console (`http://localhost:8001/console`)
 - **Location:** `audit_console/`
 - **Features:**
-  - **BFT Quorum Health Telemetry:** Real-time status, peer connectivity, and block heights of all 4 validator nodes.
+  - **BFT Quorum Health Telemetry:** Real-time status, peer connectivity, and block heights.
   - **Blockchain Ledger Explorer:** Search blocks, inspect raw JSON payloads, and verify Merkle audit paths.
   - **Real-Time Tamper Alarm Banner:** Flashes high-visibility red warnings if an attacker tampers with SQLite records.
-  - **Forensic Lab Sandbox:** Upload leaked PDFs and execute live traitor isolation.
 
 ---
 
@@ -261,25 +276,30 @@ SIGIL provides two modern, glassmorphic Single Page Applications built with **Re
 
 ```text
 c:\Users\mchan\OneDrive\Desktop\Sigil\
-├── .gitignore                          # Clean exclusions: ignores demo_data, DBs, keys, PDFs
+├── .gitignore                          # Clean exclusions: ignores demo_data, DBs, keys, certs, PDFs
 ├── PROTOCOL_SPEC.md                    # Frozen wire specification (JCS, message formats)
 ├── SIGIL_EXECUTION_PLAN.md             # Complete architectural design and milestone logs
 ├── SIGIL_REPORT.md                     # Comprehensive technical whitepaper
 ├── README.md                           # This document
+├── requirements.txt                    # Zero-cost open-source Python dependencies
+├── Dockerfile                          # Multi-stage lightweight Linux container
+├── docker-compose.yml                  # 4-node BFT cluster + Admin Console turnkey deployment
 │
 ├── crypto/                             # Core Cryptographic Library
 │   ├── pqc.py                          # NIST FIPS 203 (ML-KEM-768) & FIPS 204 (ML-DSA-65)
 │   ├── shamir.py                       # Shamir Secret Sharing (t=3, n=4) over F_p (p = 2^256 + 297)
 │   ├── merkle.py                       # Binary Merkle Tree with RFC 9162 domain separation
 │   └── tests/
-│       └── test_crypto.py              # 13 Unit tests for PQC, Shamir SSS, and Merkle proofs
+│       └── test_crypto.py              # 15 Unit tests for PQC, Shamir SSS, and Merkle proofs
 │
 ├── validator_node/                     # Post-Quantum BFT Validator Node
-│   ├── ledger.py                       # SQLite WAL ledger with Merkle tree roots
-│   ├── consensus.py                    # 2-Phase Commit consensus engine with ML-DSA voting
+│   ├── ledger.py                       # SQLite WAL ledger with Merkle tree roots & range sync
+│   ├── consensus.py                    # Strict 3-of-4 BFT consensus engine & catch-up sync
 │   ├── key_custody.py                  # Threshold key custody & PRF codeword release
 │   ├── policy.py                       # Access control policy enforcement
-│   └── main.py                         # FastAPI REST API exposing node endpoints
+│   ├── main.py                         # FastAPI REST API exposing node & sync endpoints
+│   └── tests/
+│       └── test_hardening_endpoints.py # Tests for peer config, catch-up sync, and forensics
 │
 ├── watermark_engine/                   # Micro-Typographic Steganography Engine
 │   ├── segmenter.py                    # PDF text extraction with exact font metric preservation
@@ -289,29 +309,56 @@ c:\Users\mchan\OneDrive\Desktop\Sigil\
 │   └── tests/
 │       └── test_pdf_survival.py        # 5 Tests for segmentation, survival, fallback, & PDF.js
 │
+├── admin_portal/                       # Security Officer Command Console
+│   ├── api.py                          # FastAPI REST API (auth, cluster, distribute, forensics)
+│   ├── auth.py                         # Dual-tier Active Directory / LDAP & local PBKDF2 auth
+│   ├── frontend/                       # React 19 + Vite Command Console (dist/ bundle included)
+│   │   ├── src/App.jsx                 # Glassmorphic dashboard (cluster, distribute, forensics)
+│   │   └── src/index.css               # Obsidian defense styling system
+│   └── tests/
+│       └── test_auth_enterprise.py     # 8 Tests for LDAP fallback, PBKDF2, and mTLS headers
+│
+├── desktop/                            # Enterprise Windows Desktop DRM Client
+│   ├── sigil_reader.py                 # Windows DRM runner with SetWindowDisplayAffinity
+│   ├── dist/                           # Compiled standalone binary (SigilReader.exe)
+│   └── installer/                      # Turnkey Enterprise Deployment Suite
+│       ├── Deploy-SigilReader.ps1      # Silent Intune, SCCM, and GPO PowerShell installer
+│       ├── SigilReaderSetup.iss        # Inno Setup 6 enterprise wizard & silent setup script
+│       ├── SigilReader.wxs             # WiX Toolset v3/v4 native Windows Installer MSI schema
+│       ├── build_installer.py          # Packaging automation (creates deployable ZIP & bundle)
+│       └── README.md                   # Enterprise SysAdmin IT deployment manual
+│
+├── scripts/                            # Enterprise Production Utilities
+│   ├── generate_pki.py                 # Zero-cost internal Root CA & mTLS certificate generator
+│   └── tests/
+│       └── test_pki.py                 # Tests for Root CA, node certs, SANs, and EKUs
+│
+├── docker/                             # Production Gateway & Reverse Proxy
+│   └── nginx/
+│       ├── nginx.conf                  # Hardened TLS 1.3 / mTLS proxy configuration
+│       └── Dockerfile                  # Alpine Nginx gateway container
+│
 ├── sender_tool/                        # Document Packaging & Distribution
 │   ├── build_container.py              # Packaging PDF into pre-encrypted .sigil container
 │   └── cli.py                          # Sender command-line tool
 │
 ├── recipient_client/                   # Recipient Access Daemon & UI
 │   ├── daemon/
-│   │   ├── client_crypto.py            # Ephemeral ML-KEM & ML-DSA request generation
+│   │   ├── client_crypto.py            # Encrypted key storage & ephemeral PQC requests
 │   │   └── main.py                     # Local daemon on port 5001 serving viewer
 │   └── viewer/                         # React 19 / Vite Secure Viewer UI
 │
-├── audit_console/                      # Validator Cluster Audit Console UI (React 19)
 ├── forensic_lab/                       # Leak Attribution & Evidence Packaging
 │   ├── accuse.py                       # ForensicAccuser (Hoeffding correlation against ledger)
 │   ├── evidence_bundle.py              # EvidenceBundleBuilder (Section 63 BSA JSON generator)
 │   └── tests/
-│       └── test_forensics.py           # 2 Tests for accusation and bundle verification
+│       └── test_forensics.py           # Tests for accusation and bundle verification
 │
 ├── offline_verifier/                   # Standalone Air-Gapped Court Verifier
 │   └── verify.py                       # Zero-network verification script
 │
 └── demo/                               # Master Demonstration & Benchmark Suite
-    ├── run_demo.py                     # Master 8-phase live demonstration runner
-    ├── run_demo.ps1                    # PowerShell wrapper
+    ├── run_live_cluster_demo.py        # Automated live cluster & web console demonstration
     ├── benchmark_suite.py              # Performance benchmarks & empirical M=420 simulation
     ├── test_multipage_real_document.py # Multi-page 24-block realistic directive hardening test
     ├── test_live_cluster_bft.py        # Live 4-node concurrent Uvicorn cluster with killed node
@@ -323,52 +370,84 @@ c:\Users\mchan\OneDrive\Desktop\Sigil\
 ## 10. Step-by-Step Installation & Usage Guide
 
 ### Prerequisites
-- **Python 3.11+** (Tested on Python 3.12.8 64-bit on Windows)
-- **Node.js v18+** & **npm** (Tested on Node v25.0.0 and npm 11.6.2)
+- **Python 3.11+** (Tested on Python 3.12.8 64-bit on Windows and Linux)
+- **Node.js v18+** & **npm** (Optional for UI development; pre-built production bundles are already included in `dist/`)
 - **Git**
 
-### Installation
-Clone the repository and install the required Python dependencies:
+### 1. Quick Start Installation ($0 Cost)
+Clone the repository and install the open-source dependencies:
 ```powershell
 git clone https://github.com/ChandanMeher4/Sigil.git
 cd Sigil
 
-# Install required Python packages
-pip install pymupdf pikepdf fastapi uvicorn cryptography pytest requests
-```
-
-Install frontend dependencies for both React web apps:
-```powershell
-# Recipient Viewer UI
-cd recipient_client/viewer
-npm install
-cd ../..
-
-# Audit Console UI
-cd audit_console
-npm install
-cd ..
+# Install dependencies
+pip install -r requirements.txt
 ```
 
 ---
 
-### Running the Full Test Suite (24/24 Passing)
-Execute all 24 automated unit, integration, and cluster tests:
+### 2. Running the Full Test Suite (48/48 Passing)
+Execute all 48 automated unit, cryptographic, consensus, forensic, and enterprise authentication tests:
 ```powershell
 $env:PYTHONPATH="."
 python -m pytest -v
 ```
-*Expected Output:* `============================= 24 passed in 9.88s =============================`
+*Expected Output:* `============================= 48 passed in ~25s =============================`
 
 ---
 
-### Running the Automated Benchmark Suite
-Run the performance benchmark and empirical $M=420$ scale simulation:
+### 3. Automated End-to-End Live Cluster Demonstration
+Run the complete, automated multi-process cluster demonstration:
 ```powershell
 $env:PYTHONPATH="."
-python demo/benchmark_suite.py
+python demo/run_live_cluster_demo.py --keep
 ```
-*Results will be saved to `demo_data/BENCHMARK_RESULTS.json`.*
+This single command:
+1. Spawns 4 independent Post-Quantum BFT validator nodes (ports 8001–8004).
+2. Spawns the Security Officer Command Console (port 8000).
+3. Authenticates the officer and enrolls test recipients (Alice & Bob).
+4. Packages a classified 3-page directive into a `.sigil` envelope and deposits Shamir shares across all nodes.
+5. Decrypts the document as Alice over HTTP.
+6. Simulates an unauthorized external leak and executes the traitor attribution lab.
+7. Unmasks Alice with 100% confidence, a 12-bit separation margin, and mathematical certainty ($P_{fa} \approx 10^{-5}$).
+8. Leaves the cluster running for interactive web browser inspection at **`http://127.0.0.1:8000/`**.
+
+---
+
+### 4. Docker Compose Production Deployment
+Launch the full 4-node Byzantine cluster and the Security Officer Command Console with a single command:
+```bash
+docker compose up -d
+```
+All 4 validator nodes and the admin portal start inside an isolated container network (`sigil-net`) with persistent volume storage in `./data/`. Access the dashboard at **`http://localhost:8000/`**.
+
+---
+
+### 5. Generating Zero-Cost Enterprise PKI / Mutual TLS (mTLS) Certificates
+Generate an internal Root CA and issue signed X.509 v3 certificates for all nodes, the admin console, and client workstations:
+```powershell
+$env:PYTHONPATH="."
+python scripts/generate_pki.py --out-dir certs --days 365
+```
+This generates:
+- `certs/ca.crt` & `certs/ca.key`: Enterprise Root Certificate Authority
+- `certs/node_01.crt` to `certs/node_04.crt`: Server/Client certificates for validator nodes
+- `certs/admin_portal.crt` & `certs/admin_portal.key`: Admin console certificate
+- `certs/officer_client.crt` & `certs/officer_client.key`: mTLS client certificate
+- `certs/pki_manifest.json`: Cryptographic manifest with SHA-256 fingerprints
+
+---
+
+### 6. Enterprise IT Fleet Deployment (Intune / SCCM / GPO)
+To deploy the DRM Recipient Desktop Reader silently across an entire Windows domain:
+```powershell
+# Silent installation for Microsoft Intune / SCCM / GPO:
+powershell.exe -ExecutionPolicy Bypass -File .\desktop\installer\Deploy-SigilReader.ps1 -Install
+
+# Or compile the native installer suite:
+python desktop\installer\build_installer.py
+```
+This produces [`desktop/dist/SigilReader-v1.0.0-Windows-x64.zip`](file:///c:/Users/mchan/OneDrive/Desktop/Sigil/desktop/dist/SigilReader-v1.0.0-Windows-x64.zip), complete with `SigilReader.exe`, registry shell associations, and deployment scripts.
 
 ---
 

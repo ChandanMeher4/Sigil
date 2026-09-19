@@ -38,9 +38,14 @@ app.add_middleware(
 
 DISTRIBUTED_DIR = os.environ.get("SIGIL_DISTRIBUTED_DIR", "data/distributed")
 PRIMARY_NODE_URL = os.environ.get("SIGIL_PRIMARY_NODE_URL", "http://127.0.0.1:8001")
-AUTH_SECRET = os.environ.get("SIGIL_AUTH_SECRET", "SIGIL_OFFICER_SESSION_SECRET_2026").encode("utf-8")
-DEFAULT_ADMIN_USER = os.environ.get("SIGIL_ADMIN_USER", "officer_admin")
-DEFAULT_ADMIN_PASS = os.environ.get("SIGIL_ADMIN_PASSWORD", "SigilAdmin2026!#")
+
+from admin_portal.auth import (
+    authenticate_officer,
+    authenticate_mtls,
+    AUTH_SECRET,
+    DEFAULT_ADMIN_USER,
+    DEFAULT_ADMIN_PASS,
+)
 
 os.makedirs(DISTRIBUTED_DIR, exist_ok=True)
 
@@ -48,35 +53,28 @@ os.makedirs(DISTRIBUTED_DIR, exist_ok=True)
 active_sessions: Dict[str, Dict[str, Any]] = {}
 
 
-def _hash_password(password: str, salt: bytes) -> str:
-    """PBKDF2-HMAC-SHA256 password hash."""
-    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100_000)
-    return dk.hex()
-
-
-# Default officer credentials
-DEFAULT_SALT = b"SIGIL_ADMIN_SALT_2026"
-OFFICER_CREDENTIALS = {
-    DEFAULT_ADMIN_USER: {
-        "salt": DEFAULT_SALT.hex(),
-        "password_hash": _hash_password(DEFAULT_ADMIN_PASS, DEFAULT_SALT),
-        "role": "SECURITY_OFFICER",
-        "full_name": "Chief Security Officer"
-    }
-}
-
-
 class LoginRequest(BaseModel):
     username: str
     password: str
 
 
-def get_current_officer(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
-    """Dependency: Validate Bearer session token for Security Officer actions."""
+def get_current_officer(
+    authorization: Optional[str] = Header(None),
+    x_ssl_client_verify: Optional[str] = Header(None, alias="X-SSL-Client-Verify"),
+    x_ssl_client_dn: Optional[str] = Header(None, alias="X-SSL-Client-DN"),
+) -> Dict[str, Any]:
+    """Dependency: Validate Bearer session token or mTLS client certificate."""
+    # 1. Check mTLS client certificate header from reverse proxy
+    if x_ssl_client_verify == "SUCCESS" and x_ssl_client_dn:
+        mtls_profile = authenticate_mtls(x_ssl_client_verify, x_ssl_client_dn)
+        if mtls_profile:
+            return mtls_profile
+
+    # 2. Check Bearer session token
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=401,
-            detail="Authentication required: missing or invalid Bearer token",
+            detail="Authentication required: missing or invalid Bearer token or mTLS certificate",
             headers={"WWW-Authenticate": "Bearer"}
         )
     token = authorization.split(" ")[1].strip()
@@ -92,14 +90,9 @@ def get_current_officer(authorization: Optional[str] = Header(None)) -> Dict[str
 
 @app.post("/api/admin/login")
 def admin_login(req: LoginRequest):
-    """Authenticate Security Officer with username and password."""
-    user_info = OFFICER_CREDENTIALS.get(req.username)
+    """Authenticate Security Officer with username/password via Active Directory / LDAP or local store."""
+    user_info = authenticate_officer(req.username, req.password)
     if not user_info:
-        raise HTTPException(status_code=401, detail="Invalid username or password")
-
-    salt = bytes.fromhex(user_info["salt"])
-    input_hash = _hash_password(req.password, salt)
-    if not hmac.compare_digest(input_hash, user_info["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
     # Generate session token: HMAC(secret, username || timestamp || nonce)
@@ -110,6 +103,7 @@ def admin_login(req: LoginRequest):
         "username": req.username,
         "role": user_info["role"],
         "full_name": user_info.get("full_name", req.username),
+        "source": user_info.get("source", "LOCAL_KDF"),
         "created_at": time.time()
     }
 
@@ -118,7 +112,8 @@ def admin_login(req: LoginRequest):
         "token_type": "bearer",
         "username": req.username,
         "role": user_info["role"],
-        "full_name": user_info.get("full_name")
+        "full_name": user_info.get("full_name"),
+        "source": user_info.get("source")
     }
 
 

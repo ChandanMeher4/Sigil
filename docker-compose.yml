@@ -77,6 +77,34 @@ services:
     networks:
       - sigil-net
 
+  admin-portal:
+    build: .
+    container_name: sigil-admin-portal
+    command: python -m uvicorn admin_portal.api:app --host 0.0.0.0 --port 8000
+    environment:
+      SIGIL_PRIMARY_NODE_URL: "http://node-01:8001"
+      SIGIL_PEERS_CONFIG: /app/config/peers_docker.yml
+      SIGIL_DISTRIBUTED_DIR: /app/data/distributed
+      SIGIL_ADMIN_USER: ${SIGIL_ADMIN_USER:-officer_admin}
+      SIGIL_ADMIN_PASSWORD: ${SIGIL_ADMIN_PASSWORD:-SigilAdmin2026!#}
+      SIGIL_AUTH_SECRET: ${SIGIL_AUTH_SECRET:-SIGIL_OFFICER_SESSION_SECRET_2026}
+      PYTHONPATH: /app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/distributed:/app/data/distributed
+      - ./data/sender_keys:/app/data/sender_keys
+      - ./data/recipients:/app/data/recipients
+    depends_on:
+      - node-01
+      - node-02
+      - node-03
+      - node-04
+    restart: unless-stopped
+    networks:
+      - sigil-net
+
 networks:
   sigil-net:
     driver: bridge
+

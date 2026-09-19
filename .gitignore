@@ -35,11 +35,15 @@ dist-ssr/
 # SQLite Ledger Databases & Node Data (Dynamic at runtime)
 data/
 demo_data/
+certs/
 *.db
 *.db-wal
 *.db-shm
 *.sigil
 *.bin
+*.pem
+*.key
+*.crt
 
 # OS & IDE
 .DS_Store
