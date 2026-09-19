@@ -212,8 +212,18 @@ def test_live_cluster_4node_bft_and_fault_tolerance(tmp_path):
             st4_initial = json.loads(resp.read().decode("utf-8"))
             assert st4_initial["chain_tip"]["height"] == 1, "Restarted node should initially be at height 1 before catch-up"
 
+        # Trigger catch-up on Node 4 to synchronize missed Blocks 2 and 3 from online peers
+        req_sync = urllib.request.Request(
+            "http://127.0.0.1:8004/api/consensus/sync_now",
+            data=b"{}",
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req_sync, timeout=5.0) as resp:
+            sync_res = json.loads(resp.read().decode("utf-8"))
+            assert sync_res["current_height"] == 3, f"Node 04 should have caught up to height 3, got {sync_res['current_height']}"
+
         # Now propose Block 4 across the cluster:
-        # When Node 1 sends proposal/vote for Block 4 to Node 4, Node 4 automatically catches up Block 2 and Block 3!
+        # All 4 nodes are online and synchronized!
         dave = RecipientCryptoSession(recipient_id="DAVE_LIVE_04", keys_dir=os.path.join(cluster_dir, "dave_keys"))
         d_payload, d_sig = dave.get_enroll_payload()
         post_data_d = json.dumps({"payload": d_payload, "signature_b64": d_sig}).encode("utf-8")

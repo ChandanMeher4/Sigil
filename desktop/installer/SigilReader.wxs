@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ======================================================================= -->
+<!-- SIGIL Secure DRM Reader - WiX Toolset v3/v4 Windows Installer (.MSI)   -->
+<!-- Schema for Microsoft Intune, SCCM, and Active Directory Group Policy   -->
+<!-- Silent Deployment: msiexec /i SigilReader.msi /qn ALLUSERS=1           -->
+<!-- ======================================================================= -->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product
+    Id="*"
+    Name="SIGIL Secure DRM Reader"
+    Language="1033"
+    Version="1.0.0.0"
+    Manufacturer="National Cyber Defense Initiative (SIH26237)"
+    UpgradeCode="{7A4B2C1D-8E3F-4A9B-9C0D-1E2F3A4B5C6D}">
+
+    <Package
+      InstallerVersion="500"
+      Compressed="yes"
+      InstallScope="perMachine"
+      Platform="x64"
+      Description="Hardware-Shielded Post-Quantum Secure Document Reader"
+      Comments="Complies with SIH26237 Defense Distribution Directives" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of SIGIL Secure DRM Reader is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Directory Structure -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="SIGILDIR" Name="SIGIL">
+          <Directory Id="INSTALLFOLDER" Name="SigilReader" />
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="SIGIL" />
+      </Directory>
+      <Directory Id="DesktopFolder" Name="Desktop" />
+    </Directory>
+
+    <!-- Main Components -->
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="SigilReaderExecutable" Guid="{E1D2C3B4-A5F6-4789-8012-3456789ABCDE}" Win64="yes">
+        <File Id="SigilReaderEXE" Source="..\dist\SigilReader\SigilReader.exe" KeyPath="yes">
+          <!-- Register .sigil extension for double-click launch -->
+          <Shortcut
+            Id="StartMenuSigilReader"
+            Directory="ApplicationProgramsFolder"
+            Name="SIGIL Secure DRM Reader"
+            Description="Open SIGIL Secure Classified Document Reader"
+            WorkingDirectory="INSTALLFOLDER"
+            Icon="SigilIcon.ico"
+            Advertise="yes" />
+          <Shortcut
+            Id="DesktopSigilReader"
+            Directory="DesktopFolder"
+            Name="SIGIL Secure DRM Reader"
+            Description="Open SIGIL Secure Classified Document Reader"
+            WorkingDirectory="INSTALLFOLDER"
+            Icon="SigilIcon.ico"
+            Advertise="yes" />
+        </File>
+
+        <!-- Windows Registry File Association -->
+        <ProgId Id="SigilDocument" Description="SIGIL Protected Classified Document" Icon="SigilReaderEXE" IconIndex="0">
+          <Extension Id="sigil" ContentType="application/x-sigil">
+            <Verb Id="open" Command="Open in SIGIL Secure DRM Reader" Argument="&quot;%1&quot;" />
+          </Extension>
+        </ProgId>
+      </Component>
+    </DirectoryRef>
+
+    <!-- Start Menu Folder Cleanup -->
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="ApplicationShortcutCleanup" Guid="{F2E3D4C5-B6A7-4890-9123-456789ABCDEF}">
+        <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\SIGIL\SigilReader" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <Icon Id="SigilIcon.ico" Source="..\dist\SigilReader\SigilReader.exe" />
+
+    <!-- Feature Definition -->
+    <Feature Id="MainApplication" Title="SIGIL Secure DRM Reader" Level="1">
+      <ComponentRef Id="SigilReaderExecutable" />
+      <ComponentRef Id="ApplicationShortcutCleanup" />
+    </Feature>
+  </Product>
+</Wix>
