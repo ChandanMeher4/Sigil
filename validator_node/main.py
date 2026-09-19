@@ -36,7 +36,7 @@ app.add_middleware(
 NODE_ID = os.environ.get("SIGIL_NODE_ID", "NODE_01")
 SHARE_INDEX = int(os.environ.get("SIGIL_SHARE_INDEX", "1"))
 DB_PATH = os.environ.get("SIGIL_DB_PATH", f"data/{NODE_ID.lower()}/sigil_ledger.db")
-WM_SEED = os.environ.get("SIGIL_WM_SEED", "SIGIL_GLOBAL_WATERMARK_SEED_2026").encode("utf-8")
+WM_SEED = os.environ.get("SIGIL_WM_SEED", "SIGIL_NATIONAL_DEFENCE_MASTER_SEED_2026").encode("utf-8")
 
 # Initialize Validator ML-DSA Keypair
 VALIDATOR_VK_PATH = f"data/{NODE_ID.lower()}/validator_vk.bin"
@@ -301,6 +301,66 @@ def list_blocks(limit: int = 50):
             }
             for r in rows
         ]
+
+
+class AttributeRequest(BaseModel):
+    pdf_path: Optional[str] = None
+    doc_id: Optional[str] = "DEFENCE_DIRECTIVE_2026"
+    total_blocks: Optional[int] = 24
+    lines_per_block: Optional[int] = 1
+
+
+@app.post("/api/forensics/attribute")
+def attribute_leak(req: AttributeRequest):
+    """Live forensic leak attribution: extract watermark from PDF and match against on-ledger sessions."""
+    from forensic_lab.accuse import ForensicAccuser
+    target_path = req.pdf_path or "demo_data/alice_decrypted.pdf"
+    if not os.path.exists(target_path):
+        candidates = [
+            target_path,
+            os.path.join("demo_data", os.path.basename(target_path)),
+            os.path.join("data", os.path.basename(target_path)),
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                target_path = c
+                break
+    if not os.path.exists(target_path):
+        raise HTTPException(status_code=404, detail=f"PDF file not found: {req.pdf_path}")
+
+    accuser = ForensicAccuser(ledger=ledger, wm_master_seed=WM_SEED)
+    try:
+        res = accuser.accuse_leaked_document(
+            target_path,
+            doc_id=req.doc_id,
+            total_blocks=req.total_blocks,
+            lines_per_block=req.lines_per_block
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Forensic extraction error: {str(e)}")
+
+    return {
+        "status": "ATTRIBUTED",
+        "file_analyzed": target_path,
+        "culprit": f"{res.top_candidate.recipient_id}",
+        "sessionEntryHash": res.top_candidate.session_entry_hash,
+        "blockHeight": res.top_candidate.block_height,
+        "matchScore": f"{res.top_candidate.match_percentage:.1f}% ({res.top_candidate.match_count}/{res.top_candidate.total_blocks})",
+        "p_value": f"{res.false_accusation_probability:.2e}",
+        "separation_margin": f"{res.separation_margin_bits} bits",
+        "leaked_file_hash": res.leaked_file_hash,
+        "all_candidates": [
+            {
+                "recipient_id": c.recipient_id,
+                "matches": c.match_count,
+                "total_blocks": c.total_blocks,
+                "match_percentage": round(c.match_percentage, 1),
+                "block_height": c.block_height
+            }
+            for c in res.all_candidate_scores
+        ],
+        "legalValidity": "Structured under Section 63 Bharatiya Sakshya Adhiniyam, 2023"
+    }
 
 
 # Mount static audit console dist for browser access at http://127.0.0.1:8001/console

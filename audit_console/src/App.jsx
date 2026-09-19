@@ -17,6 +17,32 @@ export default function App() {
   const [proofData, setProofData] = useState(null);
   const [forensicResult, setForensicResult] = useState(null);
   const [simRunning, setSimRunning] = useState(false);
+  const [customPdfPath, setCustomPdfPath] = useState('demo_data/alice_decrypted.pdf');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [forensicError, setForensicError] = useState(null);
+
+  const runLiveAttribution = async (path) => {
+    setIsAnalyzing(true);
+    setForensicError(null);
+    const target = path || customPdfPath;
+    try {
+      const res = await fetch(`${selectedNode.url}/api/forensics/attribute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdf_path: target }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Forensic analysis failed');
+      }
+      const data = await res.json();
+      setForensicResult(data);
+    } catch (e) {
+      setForensicError(e.message);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   // Poll node statuses
   const refreshTelemetry = async () => {
@@ -292,54 +318,96 @@ export default function App() {
                 shifts and tests the extracted codeword against all committed sessions on the immutable ledger.
               </p>
 
-              <div style={{ display: 'flex', gap: '14px', marginBottom: '20px' }}>
-                <button
-                  className="action-btn"
-                  onClick={() => {
-                    setForensicResult({
-                      status: 'ATTRIBUTED',
-                      culprit: 'ALICE (RECIPIENT_ALICE_01)',
-                      sessionEntryHash: 'd8f2b1a994c2518e3a2b7c4d8e9f1a2b3c4d5e6f',
-                      blockHeight: 3,
-                      matchScore: '100.0%',
-                      p_value: '1.42 x 10^-23',
-                      legalValidity: 'Structured under Section 63 Bharatiya Sakshya Adhiniyam, 2023',
-                    });
-                  }}
-                >
-                  ⚡ Simulate Alice Leaked Copy Attribution
-                </button>
+              <div style={{ background: '#0a0f1e', padding: '16px', borderRadius: '10px', border: '1px solid var(--border-cyan)', marginBottom: '20px' }}>
+                <label style={{ fontSize: '12px', color: '#94a3b8', display: 'block', marginBottom: '8px', fontWeight: 600 }}>
+                  Target Leaked PDF File Path (Evaluated live via PyMuPDF glyph-spacing extractor):
+                </label>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
+                  <input
+                    type="text"
+                    value={customPdfPath}
+                    onChange={(e) => setCustomPdfPath(e.target.value)}
+                    placeholder="e.g. demo_data/alice_decrypted.pdf"
+                    style={{
+                      flex: 1,
+                      background: '#070a14',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: '8px',
+                      padding: '10px 14px',
+                      color: '#fff',
+                      fontFamily: 'ui-monospace, monospace',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <button
+                    className="action-btn"
+                    style={{ background: 'linear-gradient(135deg, #06b6d4, #3b82f6)' }}
+                    onClick={() => runLiveAttribution(customPdfPath)}
+                    disabled={isAnalyzing}
+                  >
+                    {isAnalyzing ? 'Extracting Spacing...' : '🔍 Run Live Extractor'}
+                  </button>
+                </div>
 
-                <button
-                  className="action-btn"
-                  style={{ background: 'linear-gradient(135deg, #8b5cf6, #ec4899)' }}
-                  onClick={() => {
-                    setForensicResult({
-                      status: 'ATTRIBUTED',
-                      culprit: 'BOB (RECIPIENT_BOB_01)',
-                      sessionEntryHash: 'e9a4f218cb554210a48b991cf23d456789abcdef',
-                      blockHeight: 4,
-                      matchScore: '100.0%',
-                      p_value: '1.42 x 10^-23',
-                      legalValidity: 'Structured under Section 63 Bharatiya Sakshya Adhiniyam, 2023',
-                    });
-                  }}
-                >
-                  ⚡ Simulate Bob Leaked Copy Attribution
-                </button>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  <button
+                    className="action-btn"
+                    style={{ padding: '6px 12px', fontSize: '11px' }}
+                    onClick={() => {
+                      setCustomPdfPath('demo_data/alice_decrypted.pdf');
+                      runLiveAttribution('demo_data/alice_decrypted.pdf');
+                    }}
+                    disabled={isAnalyzing}
+                  >
+                    ⚡ Test Alice Leaked Copy
+                  </button>
+                  <button
+                    className="action-btn"
+                    style={{ padding: '6px 12px', fontSize: '11px', background: 'linear-gradient(135deg, #8b5cf6, #ec4899)' }}
+                    onClick={() => {
+                      setCustomPdfPath('demo_data/bob_decrypted.pdf');
+                      runLiveAttribution('demo_data/bob_decrypted.pdf');
+                    }}
+                    disabled={isAnalyzing}
+                  >
+                    ⚡ Test Bob Leaked Copy
+                  </button>
+                  <button
+                    className="action-btn"
+                    style={{ padding: '6px 12px', fontSize: '11px', background: 'linear-gradient(135deg, #f59e0b, #ef4444)' }}
+                    onClick={() => {
+                      setCustomPdfPath('demo_data/spliced_leak.pdf');
+                      runLiveAttribution('demo_data/spliced_leak.pdf');
+                    }}
+                    disabled={isAnalyzing}
+                  >
+                    ⚡ Test Spliced Collusion Copy (50/50)
+                  </button>
+                </div>
+
+                {forensicError && (
+                  <div style={{ marginTop: '12px', color: '#fb7185', fontSize: '12px', background: 'rgba(244,63,94,0.1)', padding: '8px 12px', borderRadius: '6px' }}>
+                    ⚠️ {forensicError}
+                  </div>
+                )}
               </div>
 
               {forensicResult && (
                 <div style={{ background: '#070b14', border: '1px solid var(--border-emerald)', borderRadius: '10px', padding: '20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-                    <span style={{ fontSize: '24px' }}>🎯</span>
-                    <div>
-                      <h4 style={{ color: '#34d399', fontSize: '16px' }}>LEAK ATTRIBUTION CONFIRMED</h4>
-                      <div style={{ fontSize: '11px', color: '#94a3b8' }}>Mathematical Attestation via Hoeffding Bound</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '24px' }}>🎯</span>
+                      <div>
+                        <h4 style={{ color: '#34d399', fontSize: '16px' }}>LIVE FORENSIC ATTRIBUTION CONFIRMED</h4>
+                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                          Analyzed File: <code>{forensicResult.file_analyzed || customPdfPath}</code>
+                        </div>
+                      </div>
                     </div>
+                    <span className="status-pill pill-emerald">LIVE PYMUPDF EXTRACTION</span>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', fontSize: '12px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', fontSize: '12px', marginBottom: '16px' }}>
                     <div style={{ background: '#0e1526', padding: '12px', borderRadius: '8px' }}>
                       <span style={{ color: '#64748b' }}>Identified Source:</span>
                       <div style={{ color: '#fff', fontWeight: 600, fontSize: '14px', marginTop: '2px' }}>
@@ -362,12 +430,44 @@ export default function App() {
                     </div>
 
                     <div style={{ background: '#0e1526', padding: '12px', borderRadius: '8px' }}>
-                      <span style={{ color: '#64748b' }}>Session Entry Hash on Ledger:</span>
+                      <span style={{ color: '#64748b' }}>Separation Margin &amp; Ledger Session:</span>
                       <div style={{ color: '#fff', fontFamily: 'ui-monospace, monospace', fontSize: '11px', marginTop: '2px' }}>
-                        {forensicResult.sessionEntryHash.slice(0, 16)}...
+                        Margin: {forensicResult.separation_margin || 'N/A'} | Entry: {forensicResult.sessionEntryHash ? forensicResult.sessionEntryHash.slice(0, 12) + '...' : 'N/A'}
                       </div>
                     </div>
                   </div>
+
+                  {forensicResult.all_candidates && forensicResult.all_candidates.length > 0 && (
+                    <div style={{ marginTop: '14px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '14px' }}>
+                      <h5 style={{ color: '#cbd5e1', fontSize: '12px', marginBottom: '8px' }}>
+                        Candidate Session Correlation Breakdown across Ledger:
+                      </h5>
+                      <table className="data-table" style={{ fontSize: '11px' }}>
+                        <thead>
+                          <tr>
+                            <th>Recipient</th>
+                            <th>Matches</th>
+                            <th>Correlation</th>
+                            <th>Committed Block</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {forensicResult.all_candidates.map((c, idx) => (
+                            <tr key={idx} style={{ background: idx === 0 ? 'rgba(16,185,129,0.08)' : undefined }}>
+                              <td style={{ fontWeight: 600, color: idx === 0 ? '#34d399' : '#fff' }}>
+                                {c.recipient_id} {idx === 0 ? '🏆 (Top Match)' : ''}
+                              </td>
+                              <td>{c.matches} / {c.total_blocks}</td>
+                              <td style={{ color: idx === 0 ? '#34d399' : '#38bdf8', fontWeight: 600 }}>
+                                {c.match_percentage}%
+                              </td>
+                              <td>Block #{c.block_height}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
