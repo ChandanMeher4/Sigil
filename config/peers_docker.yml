@@ -1,0 +1,17 @@
+# SIGIL Cluster Peer Configuration (Docker Compose Network)
+NODE_01:
+  url: "http://node-01:8001"
+  index: 1
+  label: "IT Department Server"
+NODE_02:
+  url: "http://node-02:8001"
+  index: 2
+  label: "Security Officer Workstation"
+NODE_03:
+  url: "http://node-03:8001"
+  index: 3
+  label: "Legal Department Server"
+NODE_04:
+  url: "http://node-04:8001"
+  index: 4
+  label: "CVO / Audit Office Server"

@@ -1,0 +1,43 @@
+{
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "devPath": "http://127.0.0.1:5001",
+    "distDir": "../src"
+  },
+  "package": {
+    "productName": "SigilReader",
+    "version": "1.0.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "process": {
+        "all": true
+      },
+      "shell": {
+        "all": true,
+        "sidecar": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "identifier": "in.gov.defence.sigil.reader",
+      "icon": [],
+      "windows": {
+        "wix": {
+          "language": "en-US"
+        }
+      }
+    },
+    "windows": [
+      {
+        "title": "SIGIL Reader - Post-Quantum Classified Viewer",
+        "width": 1280,
+        "height": 850,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ]
+  }
+}

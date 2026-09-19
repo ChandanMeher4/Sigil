@@ -12,8 +12,9 @@ import os
 import json
 import time
 from typing import Dict, Any, Optional
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from crypto.pqc import MLDSA65, MLKEM768, b64_encode, b64_decode, canonical_json
@@ -22,15 +23,31 @@ from .policy import PolicyEngine
 from .key_custody import KeyCustodyManager
 from .consensus import BFTConsensus
 
-app = FastAPI(title="SIGIL Validator Node", version="2.1")
+app = FastAPI(title="SIGIL Validator Node", version="2.2")
 
+# Configurable CORS origins
+ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("SIGIL_ALLOWED_ORIGINS", "*").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Optional API Key Authentication Middleware for LAN/Defense deployments
+API_KEY = os.environ.get("SIGIL_API_KEY", None)
+
+@app.middleware("http")
+async def api_key_auth_middleware(request: Request, call_next):
+    if API_KEY and request.url.path.startswith("/api/"):
+        # Allow health/status check without token if desired
+        if request.url.path not in ("/api/status",):
+            auth_header = request.headers.get("Authorization", "")
+            token = auth_header.replace("Bearer ", "").strip() if auth_header.startswith("Bearer ") else request.headers.get("X-API-Key", "")
+            if token != API_KEY:
+                return JSONResponse(status_code=401, content={"detail": "Unauthorized: Invalid or missing API key"})
+    return await call_next(request)
 
 # Configuration from environment or defaults
 NODE_ID = os.environ.get("SIGIL_NODE_ID", "NODE_01")
@@ -205,11 +222,51 @@ def request_decrypt(req: SignedRequest):
     }
 
 
+class ReleaseBundleRequest(BaseModel):
+    doc_id: str
+    session_entry_hash: str
+    ephemeral_ml_kem_pk: str
+    total_blocks: Optional[int] = None
+
+
+@app.post("/api/documents/release-bundle")
+def get_committed_release_bundle(req: ReleaseBundleRequest):
+    """Release this validator node's Shamir shares for an already-committed session."""
+    ephemeral_pk_bytes = b64_decode(req.ephemeral_ml_kem_pk)
+    total_blocks = req.total_blocks
+
+    if total_blocks is None:
+        with ledger._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT total_blocks FROM manifests WHERE doc_id = ?;", (req.doc_id,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail=f"Manifest not found for document {req.doc_id}")
+            total_blocks = row["total_blocks"]
+
+    try:
+        release_bundle = custody.release_shares_for_committed_session(
+            doc_id=req.doc_id,
+            session_entry_hash_hex=req.session_entry_hash,
+            ephemeral_ml_kem_pk_bytes=ephemeral_pk_bytes,
+            total_blocks=total_blocks
+        )
+        return {"key_release": release_bundle}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to release shares: {str(e)}")
+
+
 @app.post("/api/consensus/vote")
 def consensus_vote(proposal: Dict[str, Any]):
     """Peer vote handler in 2-phase commit."""
     latest = ledger.get_latest_block()
     target_height = latest["height"] + 1
+
+    # Automatic catch-up: if proposal height is ahead, synchronize missing blocks from peers first
+    if proposal.get("height", 0) > target_height:
+        consensus.sync_chain_from_peers()
+        latest = ledger.get_latest_block()
+        target_height = latest["height"] + 1
 
     if proposal.get("height") != target_height:
         return {"vote": "REJECT", "reason": f"Expected height {target_height}, got {proposal.get('height')}"}
@@ -235,9 +292,15 @@ def consensus_vote(proposal: Dict[str, Any]):
 
 @app.post("/api/consensus/commit_block")
 def consensus_commit_block(commit_data: Dict[str, Any]):
-    """Peer commit broadcast handler."""
+    """Peer commit broadcast handler with automatic divergence catch-up."""
     latest = ledger.get_latest_block()
     target_height = latest["height"] + 1
+
+    # Automatic catch-up: if commit height is ahead, synchronize missing blocks from peers first
+    if commit_data.get("height", 0) > target_height:
+        consensus.sync_chain_from_peers()
+        latest = ledger.get_latest_block()
+        target_height = latest["height"] + 1
 
     if commit_data.get("height") != target_height:
         return {"status": "SKIPPED", "reason": f"Expected height {target_height}, got {commit_data.get('height')}"}
@@ -263,6 +326,31 @@ def consensus_commit_block(commit_data: Dict[str, Any]):
         timestamp=commit_data.get("timestamp", int(time.time()))
     )
     return {"status": "COMMITTED", "height": res["height"]}
+
+
+@app.get("/api/consensus/sync")
+def sync_blocks(from_height: int = 1, to_height: Optional[int] = None):
+    """Return verified blocks range with entries and signatures for peer chain catch-up."""
+    blocks = ledger.get_blocks_range(from_height=from_height, to_height=to_height)
+    return {
+        "node_id": NODE_ID,
+        "from_height": from_height,
+        "total_returned": len(blocks),
+        "blocks": blocks
+    }
+
+
+@app.post("/api/consensus/sync_now")
+def trigger_sync():
+    """Explicitly trigger peer synchronization."""
+    synced = consensus.sync_chain_from_peers()
+    latest = ledger.get_latest_block()
+    return {
+        "status": "SYNC_COMPLETE",
+        "synced_blocks": synced,
+        "current_height": latest["height"],
+        "chain_tip_hash": latest["block_hash"]
+    }
 
 
 @app.get("/api/proof/{entry_hash}")
@@ -304,46 +392,27 @@ def list_blocks(limit: int = 50):
 
 
 class AttributeRequest(BaseModel):
-    pdf_path: Optional[str] = None
-    doc_id: Optional[str] = "DEFENCE_DIRECTIVE_2026"
-    total_blocks: Optional[int] = 24
+    pdf_path: str
+    doc_id: Optional[str] = None
+    total_blocks: Optional[int] = None
     lines_per_block: Optional[int] = 1
 
 
-@app.post("/api/forensics/attribute")
-def attribute_leak(req: AttributeRequest):
-    """Live forensic leak attribution: extract watermark from PDF and match against on-ledger sessions."""
-    from forensic_lab.accuse import ForensicAccuser
-    target_path = req.pdf_path or "demo_data/alice_decrypted.pdf"
-    if not os.path.exists(target_path):
-        candidates = [
-            target_path,
-            os.path.join("demo_data", os.path.basename(target_path)),
-            os.path.join("data", os.path.basename(target_path)),
-        ]
-        for c in candidates:
-            if os.path.exists(c):
-                target_path = c
-                break
-    if not os.path.exists(target_path):
-        raise HTTPException(status_code=404, detail=f"PDF file not found: {req.pdf_path}")
-
-    accuser = ForensicAccuser(ledger=ledger, wm_master_seed=WM_SEED)
-    try:
-        res = accuser.accuse_leaked_document(
-            target_path,
-            doc_id=req.doc_id,
-            total_blocks=req.total_blocks,
-            lines_per_block=req.lines_per_block
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Forensic extraction error: {str(e)}")
-
+def _format_forensic_result(res, target_path: str) -> Dict[str, Any]:
+    """Helper to format statistical forensic leak attribution result."""
     # Statistical significance gating:
-    # A watermark attribution is only valid if:
     # 1. False accusation probability p < 0.01 (less than 1% chance of error)
     # 2. Correlation match >= 75%
     # 3. Separation margin >= 3 bits (above random baseline noise)
+    if not res.top_candidate:
+        return {
+            "status": "NO_SESSIONS_ON_RECORD",
+            "file_analyzed": target_path,
+            "culprit": "NONE",
+            "verdict": "No decryption sessions found on ledger for attribution comparison.",
+            "all_candidates": []
+        }
+
     is_significant = (
         res.false_accusation_probability < 0.01 and
         res.top_candidate.match_percentage >= 75.0 and
@@ -398,6 +467,95 @@ def attribute_leak(req: AttributeRequest):
         ],
         "legalValidity": "Structured under Section 63 Bharatiya Sakshya Adhiniyam, 2023"
     }
+
+
+@app.post("/api/forensics/attribute")
+def attribute_leak(req: AttributeRequest):
+    """Live forensic leak attribution: extract watermark from PDF and match against on-ledger sessions."""
+    from forensic_lab.accuse import ForensicAccuser
+    if not req.pdf_path:
+        raise HTTPException(status_code=400, detail="Must provide 'pdf_path' parameter to analyze.")
+
+    target_path = req.pdf_path
+    if not os.path.exists(target_path):
+        candidates = [
+            target_path,
+            os.path.join("demo_data", os.path.basename(target_path)),
+            os.path.join("data", os.path.basename(target_path)),
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                target_path = c
+                break
+    if not os.path.exists(target_path):
+        raise HTTPException(status_code=404, detail=f"PDF file not found: {req.pdf_path}")
+
+    accuser = ForensicAccuser(ledger=ledger, wm_master_seed=WM_SEED)
+    try:
+        res = accuser.accuse_leaked_document(
+            target_path,
+            doc_id=req.doc_id,
+            total_blocks=req.total_blocks,
+            lines_per_block=req.lines_per_block
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Forensic extraction error: {str(e)}")
+
+    return _format_forensic_result(res, target_path)
+
+
+@app.post("/api/forensics/upload_and_attribute")
+async def upload_and_attribute_leak(
+    pdf_file: Request,
+):
+    """Live forensic leak attribution from uploaded multipart PDF file."""
+    import tempfile
+    import shutil
+    from fastapi import UploadFile, File, Form
+    # Parse form from request
+    form = await pdf_file.form()
+    uploaded = form.get("pdf_file")
+    if not uploaded or not hasattr(uploaded, "filename"):
+        raise HTTPException(status_code=400, detail="Missing uploaded 'pdf_file' multipart field.")
+
+    doc_id = form.get("doc_id", None) or "DEFENCE_DIRECTIVE_2026"
+    total_blocks_val = form.get("total_blocks", None)
+    if total_blocks_val:
+        total_blocks = int(total_blocks_val)
+    else:
+        total_blocks = 24
+        with ledger._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT total_blocks FROM manifests WHERE doc_id = ?;", (doc_id,))
+            row = cur.fetchone()
+            if row:
+                total_blocks = row["total_blocks"]
+    lines_val = form.get("lines_per_block", "1")
+    lines_per_block = int(lines_val) if lines_val else 1
+
+    suffix = os.path.splitext(uploaded.filename)[1] or ".pdf"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        shutil.copyfileobj(uploaded.file, tmp)
+        tmp_path = tmp.name
+
+    try:
+        from forensic_lab.accuse import ForensicAccuser
+        accuser = ForensicAccuser(ledger=ledger, wm_master_seed=WM_SEED)
+        res = accuser.accuse_leaked_document(
+            tmp_path,
+            doc_id=doc_id,
+            total_blocks=total_blocks,
+            lines_per_block=lines_per_block
+        )
+        return _format_forensic_result(res, uploaded.filename)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Forensic extraction error: {str(e)}")
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
 
 
 # Mount static audit console dist for browser access at http://127.0.0.1:8001/console

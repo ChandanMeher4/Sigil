@@ -89,7 +89,16 @@ class ForensicAccuser:
             sessions = cur.fetchall()
 
         if not sessions:
-            raise RuntimeError(f"No decryption sessions found on ledger for document '{doc_id}'")
+            return AccusationResult(
+                leaked_file_hash=leaked_hash,
+                total_blocks_analyzed=total_blocks,
+                recovered_codeword=recovered_cw,
+                top_candidate=None,
+                runner_up=None,
+                separation_margin_bits=0,
+                false_accusation_probability=1.0,
+                all_candidate_scores=[]
+            )
 
         candidate_scores: List[CandidateScore] = []
 

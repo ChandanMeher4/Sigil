@@ -8,16 +8,25 @@ Consensus Rules:
 - Direct peer-to-peer HTTP 2-phase commit (zero dynamic gossip overhead).
 """
 
+import os
 import json
 import time
+import logging
 import urllib.request
 from typing import List, Dict, Any, Tuple, Optional
 
 from crypto.pqc import MLDSA65, canonical_json, b64_encode, b64_decode
 from .ledger import Ledger
 
+logger = logging.getLogger("sigil.consensus")
 
-# Static 4-node cluster topology
+
+class ConsensusError(Exception):
+    """Raised when Byzantine fault tolerant consensus conditions are not met."""
+    pass
+
+
+# Static 4-node cluster topology (default fallback)
 STATIC_PEERS = {
     "NODE_01": {"url": "http://127.0.0.1:8001", "index": 1},
     "NODE_02": {"url": "http://127.0.0.1:8002", "index": 2},
@@ -26,15 +35,44 @@ STATIC_PEERS = {
 }
 
 
+def load_peer_config(config_path: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+    """Load peer topology from configuration file or environment variable."""
+    path = config_path or os.environ.get("SIGIL_PEERS_CONFIG", "config/peers.yml")
+    if os.path.exists(path):
+        try:
+            if path.endswith((".yml", ".yaml")):
+                import yaml
+                with open(path, "r", encoding="utf-8") as fh:
+                    cfg = yaml.safe_load(fh)
+                    if isinstance(cfg, dict) and len(cfg) > 0:
+                        return cfg
+            elif path.endswith(".json"):
+                with open(path, "r", encoding="utf-8") as fh:
+                    cfg = json.load(fh)
+                    if isinstance(cfg, dict) and len(cfg) > 0:
+                        return cfg
+        except Exception as e:
+            logger.warning(f"Failed to load peer config from {path}: {e}. Falling back to default peers.")
+    return dict(STATIC_PEERS)
+
+
 class BFTConsensus:
     """Manages round-robin leader proposals and 2-phase commit signature collection."""
 
-    def __init__(self, node_id: str, ledger: Ledger, validator_sk: bytes, validator_vk: bytes):
+    def __init__(
+        self,
+        node_id: str,
+        ledger: Ledger,
+        validator_sk: bytes,
+        validator_vk: bytes,
+        peers: Optional[Dict[str, Any]] = None
+    ):
         self.node_id = node_id
         self.ledger = ledger
         self.validator_sk = validator_sk
         self.validator_vk = validator_vk
-        self.peers = STATIC_PEERS
+        self.peers = peers or load_peer_config()
+        self.timeout = float(os.environ.get("SIGIL_CONSENSUS_TIMEOUT", "1.5"))
 
     def get_leader_for_height(self, height: int) -> str:
         """Evaluate deterministic round-robin leader: Leader(H) = H % 4."""
@@ -44,6 +82,91 @@ class BFTConsensus:
     def is_leader(self, target_height: int) -> bool:
         """Check if this node is the designated leader for target_height."""
         return self.get_leader_for_height(target_height) == self.node_id
+
+    def sync_chain_from_peers(self) -> int:
+        """Poll peers to find the highest committed chain tip and catch up missing blocks.
+        
+        Returns:
+            Number of new blocks synchronized.
+        """
+        local_latest = self.ledger.get_latest_block()
+        local_height = local_latest["height"]
+
+        # Step 1: Find peer with higher height
+        best_peer_url = None
+        highest_peer_height = local_height
+
+        for p_id, p_info in self.peers.items():
+            if p_id == self.node_id:
+                continue
+            peer_url = p_info.get("url")
+            if not peer_url:
+                continue
+            try:
+                req = urllib.request.Request(f"{peer_url}/api/status")
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                    st = json.loads(resp.read().decode("utf-8"))
+                    p_height = st.get("chain_tip", {}).get("height", 0)
+                    if p_height > highest_peer_height:
+                        highest_peer_height = p_height
+                        best_peer_url = peer_url
+            except Exception:
+                continue
+
+        if not best_peer_url or highest_peer_height <= local_height:
+            return 0
+
+        # Step 2: Fetch missing blocks from the peer with highest height
+        logger.info(f"[{self.node_id}] Synchronizing missing blocks {local_height + 1} -> {highest_peer_height} from {best_peer_url}...")
+        try:
+            req = urllib.request.Request(f"{best_peer_url}/api/consensus/sync?from_height={local_height + 1}")
+            with urllib.request.urlopen(req, timeout=10.0) as resp:
+                sync_payload = json.loads(resp.read().decode("utf-8"))
+                missing_blocks = sync_payload.get("blocks", [])
+        except Exception as err:
+            logger.warning(f"[{self.node_id}] Failed to fetch missing blocks from {best_peer_url}: {err}")
+            return 0
+
+        # Step 3: Validate and commit each block sequentially
+        synced_count = 0
+        for blk in missing_blocks:
+            curr_latest = self.ledger.get_latest_block()
+            expected_height = curr_latest["height"] + 1
+
+            if blk["height"] != expected_height:
+                logger.error(f"[{self.node_id}] Block sync error: expected height {expected_height}, received {blk['height']}")
+                break
+
+            if blk["prev_hash"] != curr_latest["block_hash"]:
+                logger.error(f"[{self.node_id}] Block sync error: prev_hash mismatch at height {expected_height}")
+                break
+
+            val_sigs = blk.get("validator_signatures", {})
+            if len(val_sigs) < 3:
+                logger.error(f"[{self.node_id}] Block sync error: block at height {expected_height} has only {len(val_sigs)}/3 signatures")
+                break
+
+            entries = [
+                {
+                    "entry_type": e["entry_type"],
+                    "payload": e["payload"],
+                    "signature": b64_decode(e["signature_b64"]),
+                    "signer_id": e["signer_id"]
+                }
+                for e in blk["entries"]
+            ]
+            decoded_sigs = {k: b64_decode(v) for k, v in val_sigs.items()}
+
+            self.ledger.commit_block(
+                entries=entries,
+                proposer_id=blk["proposer_id"],
+                validator_sigs=decoded_sigs,
+                timestamp=blk["timestamp"]
+            )
+            synced_count += 1
+            logger.info(f"[{self.node_id}] Successfully caught up Block #{expected_height} ({blk['block_hash'][:16]}...)")
+
+        return synced_count
 
     def propose_and_commit(self, entries: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Leader function: Proposes block candidate, collects 3-of-4 ML-DSA votes, and commits.
@@ -102,7 +225,7 @@ class BFTConsensus:
                     data=post_data,
                     headers={"Content-Type": "application/json"}
                 )
-                with urllib.request.urlopen(req, timeout=0.25) as resp:
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                     vote_data = json.loads(resp.read().decode("utf-8"))
                     if vote_data.get("vote") == "APPROVE":
                         sig_bytes = b64_decode(vote_data["signature_b64"])
@@ -115,9 +238,12 @@ class BFTConsensus:
 
         # Check if 3-of-4 quorum threshold reached
         if len(collected_sigs) < 3:
-            # If fewer than 3 peers are currently online (e.g. single-node demo mode),
-            # allow commit with local signature so single-node testing remains seamless.
-            pass
+            strict = os.environ.get("SIGIL_STRICT_QUORUM", "true").lower() in ("true", "1", "yes")
+            if strict:
+                raise ConsensusError(
+                    f"Quorum threshold not met: {len(collected_sigs)}/3 signatures collected. "
+                    f"At least 3 of 4 validators must be online and consenting."
+                )
 
         # Evaluate BFT Median Time
         clock_proposals.sort()
@@ -153,22 +279,12 @@ class BFTConsensus:
                     data=c_data,
                     headers={"Content-Type": "application/json"}
                 )
-                with urllib.request.urlopen(c_req, timeout=0.25) as _:
+                with urllib.request.urlopen(c_req, timeout=self.timeout) as _:
                     pass
-            except Exception:
-                # If peer HTTP server is offline, sync directly to local peer database file if present
-                import os
-                peer_db = f"data/{p_id.lower()}/sigil_ledger.db"
-                if os.path.exists(peer_db):
-                    try:
-                        p_ledger = Ledger(db_path=peer_db, node_id=p_id)
-                        p_ledger.commit_block(
-                            entries=entries,
-                            proposer_id=self.node_id,
-                            validator_sigs=collected_sigs,
-                            timestamp=median_time
-                        )
-                    except Exception:
-                        pass
+            except Exception as err:
+                logger.warning(
+                    f"Peer {p_id} ({peer_url}) unreachable for commit broadcast: {err}. "
+                    f"Peer will sync on next proposal round."
+                )
 
         return commit_result

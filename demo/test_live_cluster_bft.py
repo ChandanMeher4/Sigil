@@ -157,6 +157,88 @@ def test_live_cluster_4node_bft_and_fault_tolerance(tmp_path):
             st3 = json.loads(resp.read().decode("utf-8"))
             assert st3["chain_tip"]["height"] == 2, "Node 03 should have synchronized Block 2 under 3-node quorum"
 
+        # --------------------------------------------------------------------
+        # 6. COMMIT ANOTHER BLOCK WHILE NODE 4 IS STILL DEAD (Block 3)
+        # --------------------------------------------------------------------
+        charlie = RecipientCryptoSession(recipient_id="CHARLIE_LIVE_03", keys_dir=os.path.join(cluster_dir, "charlie_keys"))
+        c_payload, c_sig = charlie.get_enroll_payload()
+        post_data_c = json.dumps({"payload": c_payload, "signature_b64": c_sig}).encode("utf-8")
+        req_c = urllib.request.Request(
+            "http://127.0.0.1:8001/api/enroll",
+            data=post_data_c,
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req_c, timeout=5.0) as resp:
+            assert resp.status == 200
+            res_c = json.loads(resp.read().decode("utf-8"))
+            assert res_c["block_height"] == 3, f"Expected Block 3, got {res_c['block_height']}"
+
+        # --------------------------------------------------------------------
+        # 7. RESTART NODE 4 & TEST AUTOMATIC CATCH-UP / RECONCILIATION
+        # --------------------------------------------------------------------
+        # Node 4 missed Block 2 and Block 3 while offline.
+        # Restart Node 4 with its previous ledger state:
+        env4 = os.environ.copy()
+        env4["PYTHONPATH"] = "."
+        env4["SIGIL_NODE_ID"] = "NODE_04"
+        env4["SIGIL_SHARE_INDEX"] = "4"
+        env4["SIGIL_DB_PATH"] = os.path.join(cluster_dir, "node_04_ledger.db")
+        env4["SIGIL_WM_SEED"] = "LIVE_CLUSTER_TEST_SEED_2026"
+
+        proc4_restarted = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "validator_node.main:app",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "8004",
+                "--log-level",
+                "warning"
+            ],
+            env=env4,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        processes["NODE_04"] = proc4_restarted
+
+        # Wait for Node 4 to come back online
+        assert wait_for_node("http://127.0.0.1:8004", timeout=12.0) is True
+
+        # Node 4 initially has height 1:
+        with urllib.request.urlopen("http://127.0.0.1:8004/api/status", timeout=2.0) as resp:
+            st4_initial = json.loads(resp.read().decode("utf-8"))
+            assert st4_initial["chain_tip"]["height"] == 1, "Restarted node should initially be at height 1 before catch-up"
+
+        # Now propose Block 4 across the cluster:
+        # When Node 1 sends proposal/vote for Block 4 to Node 4, Node 4 automatically catches up Block 2 and Block 3!
+        dave = RecipientCryptoSession(recipient_id="DAVE_LIVE_04", keys_dir=os.path.join(cluster_dir, "dave_keys"))
+        d_payload, d_sig = dave.get_enroll_payload()
+        post_data_d = json.dumps({"payload": d_payload, "signature_b64": d_sig}).encode("utf-8")
+        req_d = urllib.request.Request(
+            "http://127.0.0.1:8001/api/enroll",
+            data=post_data_d,
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req_d, timeout=5.0) as resp:
+            assert resp.status == 200
+            res_d = json.loads(resp.read().decode("utf-8"))
+            assert res_d["block_height"] == 4, f"Expected Block 4, got {res_d['block_height']}"
+
+        time.sleep(0.5)
+
+        # Query Node 1 chain tip to compare
+        with urllib.request.urlopen("http://127.0.0.1:8001/api/status", timeout=2.0) as resp:
+            st1_final = json.loads(resp.read().decode("utf-8"))
+
+        # Confirm Node 4 successfully caught up to Block 4 and has identical block hash!
+        with urllib.request.urlopen("http://127.0.0.1:8004/api/status", timeout=2.0) as resp:
+            st4_final = json.loads(resp.read().decode("utf-8"))
+            assert st4_final["chain_tip"]["height"] == 4, f"Node 04 should have caught up to height 4, got {st4_final['chain_tip']['height']}"
+            assert st4_final["chain_tip"]["block_hash"] == st1_final["chain_tip"]["block_hash"], "Node 04 reconciled block hash must match leader's committed hash exactly"
+
     finally:
         # Clean teardown: kill all child processes
         for n_id, proc in processes.items():

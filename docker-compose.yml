@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  node-01:
+    build: .
+    container_name: sigil-node-01
+    command: python -m uvicorn validator_node.main:app --host 0.0.0.0 --port 8001
+    environment:
+      SIGIL_NODE_ID: NODE_01
+      SIGIL_SHARE_INDEX: 1
+      SIGIL_PEERS_CONFIG: /app/config/peers_docker.yml
+      SIGIL_API_KEY: ${SIGIL_API_KEY:-}
+      SIGIL_STRICT_QUORUM: "true"
+      PYTHONPATH: /app
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./data/node_01:/app/data/node_01
+    restart: unless-stopped
+    networks:
+      - sigil-net
+
+  node-02:
+    build: .
+    container_name: sigil-node-02
+    command: python -m uvicorn validator_node.main:app --host 0.0.0.0 --port 8001
+    environment:
+      SIGIL_NODE_ID: NODE_02
+      SIGIL_SHARE_INDEX: 2
+      SIGIL_PEERS_CONFIG: /app/config/peers_docker.yml
+      SIGIL_API_KEY: ${SIGIL_API_KEY:-}
+      SIGIL_STRICT_QUORUM: "true"
+      PYTHONPATH: /app
+    ports:
+      - "8002:8001"
+    volumes:
+      - ./data/node_02:/app/data/node_02
+    restart: unless-stopped
+    networks:
+      - sigil-net
+
+  node-03:
+    build: .
+    container_name: sigil-node-03
+    command: python -m uvicorn validator_node.main:app --host 0.0.0.0 --port 8001
+    environment:
+      SIGIL_NODE_ID: NODE_03
+      SIGIL_SHARE_INDEX: 3
+      SIGIL_PEERS_CONFIG: /app/config/peers_docker.yml
+      SIGIL_API_KEY: ${SIGIL_API_KEY:-}
+      SIGIL_STRICT_QUORUM: "true"
+      PYTHONPATH: /app
+    ports:
+      - "8003:8001"
+    volumes:
+      - ./data/node_03:/app/data/node_03
+    restart: unless-stopped
+    networks:
+      - sigil-net
+
+  node-04:
+    build: .
+    container_name: sigil-node-04
+    command: python -m uvicorn validator_node.main:app --host 0.0.0.0 --port 8001
+    environment:
+      SIGIL_NODE_ID: NODE_04
+      SIGIL_SHARE_INDEX: 4
+      SIGIL_PEERS_CONFIG: /app/config/peers_docker.yml
+      SIGIL_API_KEY: ${SIGIL_API_KEY:-}
+      SIGIL_STRICT_QUORUM: "true"
+      PYTHONPATH: /app
+    ports:
+      - "8004:8001"
+    volumes:
+      - ./data/node_04:/app/data/node_04
+    restart: unless-stopped
+    networks:
+      - sigil-net
+
+networks:
+  sigil-net:
+    driver: bridge

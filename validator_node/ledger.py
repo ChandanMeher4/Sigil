@@ -271,6 +271,51 @@ class Ledger:
                 "entry_hashes": [r[0].hex() for r in entry_records]
             }
 
+    def get_blocks_range(self, from_height: int, to_height: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Fetch all blocks, entries, and validator signatures from from_height to to_height."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            query = "SELECT * FROM blocks WHERE height >= ?"
+            params = [from_height]
+            if to_height is not None:
+                query += " AND height <= ?"
+                params.append(to_height)
+            query += " ORDER BY height ASC;"
+            cur.execute(query, params)
+            block_rows = cur.fetchall()
+
+            results = []
+            for b in block_rows:
+                h = b["height"]
+                cur.execute("SELECT * FROM entries WHERE block_height = ? ORDER BY rowid ASC;", (h,))
+                entry_rows = cur.fetchall()
+                cur.execute("SELECT * FROM block_signatures WHERE block_height = ?;", (h,))
+                sig_rows = cur.fetchall()
+
+                results.append({
+                    "height": h,
+                    "prev_hash": b["prev_hash"].hex(),
+                    "merkle_root": b["merkle_root"].hex(),
+                    "timestamp": b["timestamp"],
+                    "proposer_id": b["proposer_id"],
+                    "block_hash": b["block_hash"].hex(),
+                    "entries": [
+                        {
+                            "entry_type": e["entry_type"],
+                            "payload": json.loads(e["payload"]) if e["payload"].startswith(("{", "[")) else e["payload"],
+                            "signature_b64": b64_encode(e["signature"]),
+                            "signer_id": e["signer_id"],
+                            "entry_hash": e["entry_hash"].hex()
+                        }
+                        for e in entry_rows
+                    ],
+                    "validator_signatures": {
+                        s["validator_id"]: b64_encode(s["signature"])
+                        for s in sig_rows
+                    }
+                })
+            return results
+
     def store_key_shares(self, doc_id: str, shares_records: List[Dict[str, Any]]):
         """Store encrypted Shamir key shares for a document."""
         with self._get_conn() as conn:

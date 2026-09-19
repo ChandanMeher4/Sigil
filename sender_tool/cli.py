@@ -22,8 +22,9 @@ def main():
     dist_parser.add_argument("--pdf", required=True, help="Path to input PDF file")
     dist_parser.add_argument("--doc-id", required=True, help="Unique document identifier")
     dist_parser.add_argument("--recipients", required=True, help="Comma-separated recipient IDs")
-    dist_parser.add_argument("--node-url", default="http://127.0.0.1:8001", help="Validator node URL")
+    dist_parser.add_argument("--node-url", default="http://127.0.0.1:8001", help="Primary validator node URL")
     dist_parser.add_argument("--output", default=None, help="Output .sigil container path")
+    dist_parser.add_argument("--peers-config", default=None, help="Path to peers YAML configuration")
 
     args = parser.parse_args()
 
@@ -45,10 +46,9 @@ def main():
         recipients_list = [r.strip() for r in args.recipients.split(",") if r.strip()]
         recipients_map = {}
 
-        # Fetch enrolled public keys from validator node
+        # Fetch enrolled public keys for recipients
         print(f"[*] Fetching enrolled public keys for recipients: {recipients_list}")
         for r_id in recipients_list:
-            # Check local key cache or query node
             client_pk_file = f"data/client_keys/{r_id}_kem_pk.bin"
             if os.path.exists(client_pk_file):
                 with open(client_pk_file, "rb") as f:
@@ -72,7 +72,7 @@ def main():
             f.write(container_bytes)
         print(f"[+] Container exported: {out_path} ({len(container_bytes)} bytes)")
 
-        # Submit MANIFEST to validator node
+        # Submit MANIFEST to primary validator node
         print(f"[*] Submitting MANIFEST to validator ledger at {args.node_url}...")
         manifest_req = urllib.request.Request(
             f"{args.node_url}/api/manifest",
@@ -83,33 +83,70 @@ def main():
             man_res = json.loads(resp.read().decode("utf-8"))
             print(f"[+] Manifest committed on ledger! Block Height: {man_res['block_height']}, Entry: {man_res['entry_hash'][:16]}...")
 
-        # Deposit key shares for Node 1 (in single node mode, or distribute across nodes)
-        print(f"[*] Depositing Shamir key shares with validator node at {args.node_url}...")
-        shares_payload = {
-            "doc_id": args.doc_id,
-            "shares": node_shares[1]
-        }
-        shares_req = urllib.request.Request(
-            f"{args.node_url}/api/key_shares",
-            data=json.dumps(shares_payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(shares_req) as resp:
-            sh_res = json.loads(resp.read().decode("utf-8"))
-            print(f"[+] Key shares deposited in quorum custody: {sh_res['total_shares_stored']} shares stored.")
+        # Resolve peer topology for distributing Shamir shares over HTTP
+        peers_config_path = args.peers_config or os.environ.get("SIGIL_PEERS_CONFIG", "config/peers.yml")
+        peers = None
+        if os.path.exists(peers_config_path):
+            try:
+                import yaml
+                with open(peers_config_path, "r", encoding="utf-8") as pf:
+                    peers = yaml.safe_load(pf)
+            except Exception as pe:
+                print(f"[!] Could not load peers config from {peers_config_path}: {pe}")
 
-        # Also store shares into sibling node databases if present on disk
-        for idx in range(2, 5):
-            p_db = f"data/node_0{idx}/sigil_ledger.db"
-            if os.path.exists(p_db) and idx in node_shares:
-                try:
-                    from validator_node.ledger import Ledger
-                    p_ledger = Ledger(p_db, node_id=f"NODE_0{idx}")
-                    p_ledger.store_key_shares(args.doc_id, node_shares[idx])
-                except Exception:
-                    pass
+        deposited_nodes = 0
+        if peers and isinstance(peers, dict):
+            print(f"[*] Distributing Shamir key shares across {len(peers)} validator nodes over HTTP...")
+            for n_id, p_info in peers.items():
+                idx = p_info.get("index")
+                url = p_info.get("url")
+                if idx in node_shares and url:
+                    shares_payload = {
+                        "doc_id": args.doc_id,
+                        "shares": node_shares[idx]
+                    }
+                    try:
+                        req = urllib.request.Request(
+                            f"{url}/api/key_shares",
+                            data=json.dumps(shares_payload).encode("utf-8"),
+                            headers={"Content-Type": "application/json"}
+                        )
+                        with urllib.request.urlopen(req, timeout=5.0) as resp:
+                            res = json.loads(resp.read().decode("utf-8"))
+                            deposited_nodes += 1
+                            print(f"    [✓] {n_id} ({url}): Deposited {res.get('total_shares_stored', len(node_shares[idx]))} shares.")
+                    except Exception as err:
+                        print(f"    [✗] {n_id} ({url}) unreachable: {err}")
+        else:
+            # Fallback: Deposit key shares to primary node url
+            print(f"[*] Depositing Shamir key shares with primary node at {args.node_url}...")
+            shares_payload = {
+                "doc_id": args.doc_id,
+                "shares": node_shares[1]
+            }
+            shares_req = urllib.request.Request(
+                f"{args.node_url}/api/key_shares",
+                data=json.dumps(shares_payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(shares_req) as resp:
+                sh_res = json.loads(resp.read().decode("utf-8"))
+                deposited_nodes += 1
+                print(f"[+] Key shares deposited: {sh_res.get('total_shares_stored')} stored.")
 
-        print(f"\n[SUCCESS] Document '{args.doc_id}' distributed under two-lock broadcast model!")
+        # Local single-node dev fallback if enabled
+        if os.environ.get("SIGIL_ALLOW_LOCAL_FALLBACK", "false").lower() in ("true", "1", "yes"):
+            for idx in range(2, 5):
+                p_db = f"data/node_0{idx}/sigil_ledger.db"
+                if os.path.exists(p_db) and idx in node_shares:
+                    try:
+                        from validator_node.ledger import Ledger
+                        p_ledger = Ledger(p_db, node_id=f"NODE_0{idx}")
+                        p_ledger.store_key_shares(args.doc_id, node_shares[idx])
+                    except Exception:
+                        pass
+
+        print(f"\n[SUCCESS] Document '{args.doc_id}' distributed under two-lock broadcast model across {deposited_nodes} active validator nodes!")
 
 
 if __name__ == "__main__":

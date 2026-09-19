@@ -12,15 +12,18 @@ Runs locally on recipient workstation (Port 5001):
 import os
 import io
 import json
+import logging
 import urllib.request
-from typing import Dict, Any, Optional
-from fastapi import FastAPI, HTTPException, Response
+from typing import Dict, Any, Optional, List
+from fastapi import FastAPI, HTTPException, Response, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .client_crypto import RecipientCryptoSession
 
-app = FastAPI(title="SIGIL Recipient Daemon", version="2.1")
+logger = logging.getLogger("sigil.daemon")
+
+app = FastAPI(title="SIGIL Recipient Daemon", version="2.2")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,10 +33,43 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-RECIPIENT_ID = os.environ.get("SIGIL_RECIPIENT_ID", "ALICE")
+DEFAULT_RECIPIENT_ID = os.environ.get("SIGIL_RECIPIENT_ID", "ALICE")
 VALIDATOR_URL = os.environ.get("SIGIL_VALIDATOR_URL", "http://127.0.0.1:8001")
 
-session = RecipientCryptoSession(recipient_id=RECIPIENT_ID)
+_session_cache: Dict[str, RecipientCryptoSession] = {}
+
+
+def get_recipient_session(recipient_id: Optional[str] = None, passphrase: Optional[str] = None) -> RecipientCryptoSession:
+    """Retrieve or initialize a RecipientCryptoSession for the given identity and passphrase."""
+    r_id = recipient_id or os.environ.get("SIGIL_RECIPIENT_ID", DEFAULT_RECIPIENT_ID)
+    pw = passphrase or os.environ.get("SIGIL_KEY_PASSPHRASE", None)
+    cache_key = f"{r_id}:{pw or ''}"
+    if cache_key not in _session_cache:
+        _session_cache[cache_key] = RecipientCryptoSession(recipient_id=r_id, passphrase=pw)
+    return _session_cache[cache_key]
+
+
+def get_configured_validator_nodes(custom_nodes: Optional[list] = None) -> List[str]:
+    """Resolve validator cluster URLs from parameters, environment, or peers.yml."""
+    if custom_nodes and len(custom_nodes) > 0:
+        return custom_nodes
+    env_nodes = os.environ.get("SIGIL_VALIDATOR_NODES")
+    if env_nodes:
+        return [u.strip() for u in env_nodes.split(",") if u.strip()]
+    peers_path = os.environ.get("SIGIL_PEERS_CONFIG", "config/peers.yml")
+    if os.path.exists(peers_path):
+        try:
+            import yaml
+            with open(peers_path, "r", encoding="utf-8") as f:
+                peers = yaml.safe_load(f)
+                if isinstance(peers, dict):
+                    urls = [info["url"] for info in peers.values() if "url" in info]
+                    if urls:
+                        return urls
+        except Exception:
+            pass
+    return [VALIDATOR_URL]
+
 
 # In-memory document storage: doc_id -> {"pdf_bytes": bytes, "session_info": dict}
 document_cache: Dict[str, Dict[str, Any]] = {}
@@ -43,14 +79,17 @@ class OpenContainerRequest(BaseModel):
     container_path: Optional[str] = None
     container_bytes_b64: Optional[str] = None
     validator_nodes: Optional[list] = None
+    recipient_id: Optional[str] = None
+    passphrase: Optional[str] = None
 
 
 @app.get("/api/identity")
-def get_identity():
+def get_identity(recipient_id: Optional[str] = Query(None), passphrase: Optional[str] = Query(None)):
     """Return local recipient ID and public keys."""
     from crypto.pqc import b64_encode
+    session = get_recipient_session(recipient_id, passphrase)
     return {
-        "recipient_id": RECIPIENT_ID,
+        "recipient_id": session.recipient_id,
         "ml_kem_public_key": b64_encode(session.kem_pk),
         "ml_dsa_public_key": b64_encode(session.dsa_pk),
         "keys_dir": session.keys_dir
@@ -58,8 +97,9 @@ def get_identity():
 
 
 @app.post("/api/enroll_remote")
-def enroll_on_ledger(validator_url: Optional[str] = None):
+def enroll_on_ledger(validator_url: Optional[str] = None, recipient_id: Optional[str] = None, passphrase: Optional[str] = None):
     """Enroll this recipient on the validator ledger."""
+    session = get_recipient_session(recipient_id, passphrase)
     v_url = validator_url or VALIDATOR_URL
     payload, sig_b64 = session.get_enroll_payload()
 
@@ -77,12 +117,14 @@ def enroll_on_ledger(validator_url: Optional[str] = None):
 @app.post("/api/open_document")
 def open_document(req: OpenContainerRequest):
     """Open and decrypt a .sigil container file via Log-Before-Key protocol."""
+    session = get_recipient_session(req.recipient_id, req.passphrase)
+
     # 1. Load container bytes
     if req.container_path:
         c_path = req.container_path
         if not os.path.exists(c_path):
             candidates = [
-                os.path.join("data", "alice", "policy_directive_2026.sigil"),
+                os.path.join("data", session.recipient_id.lower(), "policy_directive_2026.sigil"),
                 os.path.join("demo_data", "DEFENCE_DIRECTIVE_2026.sigil"),
                 os.path.join("data", "DEFENCE_DIRECTIVE_2026.sigil"),
                 os.path.join("demo_data", os.path.basename(c_path)),
@@ -111,12 +153,14 @@ def open_document(req: OpenContainerRequest):
     # 3. Build canonical DECRYPT_REQUEST and sign with recipient's ML-DSA-65 key
     req_payload, sig_b64, eph_dk = session.create_decrypt_request(doc_id)
 
-    # 4. Dispatch to validator node (or quorum)
-    nodes = req.validator_nodes or [VALIDATOR_URL]
+    # 4. Dispatch DECRYPT_REQUEST to validator node cluster
+    candidate_nodes = get_configured_validator_nodes(req.validator_nodes)
     release_bundles = []
     commit_info = None
+    successful_node = None
 
-    for node_url in nodes:
+    # Step 4a: Commit request with the first available validator node
+    for node_url in candidate_nodes:
         post_data = json.dumps({"payload": req_payload, "signature_b64": sig_b64}).encode("utf-8")
         http_req = urllib.request.Request(
             f"{node_url}/api/request_decrypt",
@@ -128,36 +172,80 @@ def open_document(req: OpenContainerRequest):
                 data = json.loads(resp.read().decode("utf-8"))
                 release_bundles.append(data["key_release"])
                 commit_info = data["commit"]
+                successful_node = node_url
+                break
         except Exception as err:
-            if len(nodes) == 1:
-                raise HTTPException(status_code=502, detail=f"Validator node {node_url} failed: {str(err)}")
+            logger.warning(f"Validator node {node_url} failed request_decrypt: {err}")
             continue
 
-    # Threshold Shamir Reconstruction Fallback for Single-Node / Local Dev
-    if len(release_bundles) < 3 and commit_info:
-        from validator_node.ledger import Ledger
-        from validator_node.key_custody import KeyCustodyManager
-        from crypto.pqc import b64_decode
-        wm_seed = b"SIGIL_NATIONAL_DEFENCE_MASTER_SEED_2026"
-        for idx in [2, 3, 4]:
-            if len(release_bundles) >= 3:
-                break
-            p_db = f"data/node_0{idx}/sigil_ledger.db"
-            if not os.path.exists(p_db):
-                p_db = f"demo_data/node_0{idx}/sigil_ledger.db"
-            if os.path.exists(p_db):
-                try:
-                    p_ledger = Ledger(p_db, node_id=f"NODE_0{idx}")
-                    p_custody = KeyCustodyManager(p_ledger, f"NODE_0{idx}", idx, wm_seed)
-                    bndl = p_custody.release_shares_for_committed_session(
-                        doc_id=doc_id,
-                        session_entry_hash_hex=commit_info["session_entry_hash"],
-                        ephemeral_ml_kem_pk_bytes=b64_decode(req_payload["ephemeral_ml_kem_pk"]),
-                        total_blocks=len(encrypted_blocks)
-                    )
-                    release_bundles.append(bndl)
-                except Exception:
-                    pass
+    if not commit_info:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to commit decryption request to any validator node: {candidate_nodes}"
+        )
+
+    # Step 4b: Collect remaining Shamir key shares from peer nodes over HTTP
+    session_hash = commit_info["session_entry_hash"]
+    ephem_pk_b64 = req_payload["ephemeral_ml_kem_pk"]
+
+    for node_url in candidate_nodes:
+        if len(release_bundles) >= 3:
+            break
+        if node_url == successful_node:
+            continue
+        try:
+            req_data = json.dumps({
+                "doc_id": doc_id,
+                "session_entry_hash": session_hash,
+                "ephemeral_ml_kem_pk": ephem_pk_b64,
+                "total_blocks": len(encrypted_blocks)
+            }).encode("utf-8")
+            http_req = urllib.request.Request(
+                f"{node_url}/api/documents/release-bundle",
+                data=req_data,
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(http_req, timeout=5.0) as resp:
+                res_data = json.loads(resp.read().decode("utf-8"))
+                if "key_release" in res_data:
+                    release_bundles.append(res_data["key_release"])
+        except Exception as err:
+            logger.warning(f"Could not retrieve release bundle from peer {node_url}: {err}")
+            continue
+
+    # Step 4c: Threshold Shamir Reconstruction Fallback for Single-Node / Local Dev
+    if len(release_bundles) < 3:
+        allow_local = os.environ.get("SIGIL_ALLOW_LOCAL_FALLBACK", "false").lower() in ("true", "1", "yes")
+        if allow_local and commit_info:
+            from validator_node.ledger import Ledger
+            from validator_node.key_custody import KeyCustodyManager
+            from crypto.pqc import b64_decode
+            wm_seed = b"SIGIL_NATIONAL_DEFENCE_MASTER_SEED_2026"
+            for idx in [2, 3, 4]:
+                if len(release_bundles) >= 3:
+                    break
+                p_db = f"data/node_0{idx}/sigil_ledger.db"
+                if not os.path.exists(p_db):
+                    p_db = f"demo_data/node_0{idx}/sigil_ledger.db"
+                if os.path.exists(p_db):
+                    try:
+                        p_ledger = Ledger(p_db, node_id=f"NODE_0{idx}")
+                        p_custody = KeyCustodyManager(p_ledger, f"NODE_0{idx}", idx, wm_seed)
+                        bndl = p_custody.release_shares_for_committed_session(
+                            doc_id=doc_id,
+                            session_entry_hash_hex=commit_info["session_entry_hash"],
+                            ephemeral_ml_kem_pk_bytes=b64_decode(req_payload["ephemeral_ml_kem_pk"]),
+                            total_blocks=len(encrypted_blocks)
+                        )
+                        release_bundles.append(bndl)
+                    except Exception:
+                        pass
+
+        if len(release_bundles) < 3:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Quorum threshold not met: collected only {len(release_bundles)}/3 Shamir key release bundles. At least 3 validator nodes must be reachable."
+            )
 
     # 5. Reconstruct keys from Shamir shares, decrypt blocks, and assemble watermarked PDF
     try:

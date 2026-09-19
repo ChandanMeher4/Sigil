@@ -11,21 +11,32 @@ Handles on-device cryptographic duties:
 import os
 import json
 import time
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
+from cryptography.exceptions import InvalidTag
 
 from crypto.pqc import MLKEM768, MLDSA65, b64_encode, b64_decode, canonical_json
 from crypto.shamir import ShamirSecretSharing
 from watermark_engine.variant_gen import VariantGenerator
 from watermark_engine.segmenter import TextBlock
 
+MAGIC_ENC_HEADER = b"SIGIL_ENC_KEY_V1"
+
 
 class RecipientCryptoSession:
     """Manages local private keys, request signing, and key reconstruction."""
 
-    def __init__(self, recipient_id: str, keys_dir: str = "data/client_keys"):
+    def __init__(
+        self,
+        recipient_id: str,
+        keys_dir: str = "data/client_keys",
+        passphrase: Optional[str] = None
+    ):
         self.recipient_id = recipient_id
         self.keys_dir = keys_dir
+        self.passphrase = passphrase or os.environ.get("SIGIL_KEY_PASSPHRASE", None)
         os.makedirs(keys_dir, exist_ok=True)
 
         self.kem_pk_path = os.path.join(keys_dir, f"{recipient_id}_kem_pk.bin")
@@ -35,19 +46,72 @@ class RecipientCryptoSession:
 
         self._load_or_generate_keys()
 
+    def _encrypt_key(self, key_bytes: bytes, passphrase: str) -> bytes:
+        """Derive key using PBKDF2-HMAC-SHA256 and encrypt with AES-256-GCM."""
+        salt = os.urandom(16)
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=100_000,
+        )
+        derived = kdf.derive(passphrase.encode("utf-8"))
+        nonce = os.urandom(12)
+        aes = AESGCM(derived)
+        ct = aes.encrypt(nonce, key_bytes, associated_data=MAGIC_ENC_HEADER)
+        return MAGIC_ENC_HEADER + salt + nonce + ct
+
+    def _decrypt_key(self, stored_bytes: bytes) -> bytes:
+        """Decrypt key using passphrase if encrypted; otherwise return raw."""
+        if not stored_bytes.startswith(MAGIC_ENC_HEADER):
+            return stored_bytes
+        if not self.passphrase:
+            raise ValueError(
+                f"Private key for recipient '{self.recipient_id}' is encrypted at rest. "
+                "Passphrase is required to unlock."
+            )
+        prefix_len = len(MAGIC_ENC_HEADER)
+        salt = stored_bytes[prefix_len:prefix_len + 16]
+        nonce = stored_bytes[prefix_len + 16:prefix_len + 28]
+        ct = stored_bytes[prefix_len + 28:]
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=100_000,
+        )
+        derived = kdf.derive(self.passphrase.encode("utf-8"))
+        aes = AESGCM(derived)
+        try:
+            return aes.decrypt(nonce, ct, associated_data=MAGIC_ENC_HEADER)
+        except InvalidTag:
+            raise ValueError(f"Invalid passphrase: unable to unlock private key for '{self.recipient_id}'.")
+
     def _load_or_generate_keys(self):
         if os.path.exists(self.kem_pk_path) and os.path.exists(self.dsa_sk_path):
-            with open(self.kem_pk_path, "rb") as f: self.kem_pk = f.read()
-            with open(self.kem_sk_path, "rb") as f: self.kem_sk = f.read()
-            with open(self.dsa_pk_path, "rb") as f: self.dsa_pk = f.read()
-            with open(self.dsa_sk_path, "rb") as f: self.dsa_sk = f.read()
+            with open(self.kem_pk_path, "rb") as f:
+                self.kem_pk = f.read()
+            with open(self.kem_sk_path, "rb") as f:
+                self.kem_sk = self._decrypt_key(f.read())
+            with open(self.dsa_pk_path, "rb") as f:
+                self.dsa_pk = f.read()
+            with open(self.dsa_sk_path, "rb") as f:
+                self.dsa_sk = self._decrypt_key(f.read())
         else:
             self.kem_pk, self.kem_sk = MLKEM768.keygen()
             self.dsa_pk, self.dsa_sk = MLDSA65.keygen()
-            with open(self.kem_pk_path, "wb") as f: f.write(self.kem_pk)
-            with open(self.kem_sk_path, "wb") as f: f.write(self.kem_sk)
-            with open(self.dsa_pk_path, "wb") as f: f.write(self.dsa_pk)
-            with open(self.dsa_sk_path, "wb") as f: f.write(self.dsa_sk)
+
+            kem_sk_data = self._encrypt_key(self.kem_sk, self.passphrase) if self.passphrase else self.kem_sk
+            dsa_sk_data = self._encrypt_key(self.dsa_sk, self.passphrase) if self.passphrase else self.dsa_sk
+
+            with open(self.kem_pk_path, "wb") as f:
+                f.write(self.kem_pk)
+            with open(self.kem_sk_path, "wb") as f:
+                f.write(kem_sk_data)
+            with open(self.dsa_pk_path, "wb") as f:
+                f.write(self.dsa_pk)
+            with open(self.dsa_sk_path, "wb") as f:
+                f.write(dsa_sk_data)
 
     def get_enroll_payload(self) -> Tuple[Dict[str, Any], str]:
         """Prepare identity enrollment payload and self-signature."""

@@ -226,3 +226,60 @@ def test_canonical_json_determinism():
 
     assert bytes1 == bytes2
     assert bytes1 == b'{"a":2,"m":{"a":4,"b":3},"z":1}'
+
+
+# ============================================================================
+# 6. Passphrase Encrypted Key Storage Tests
+# ============================================================================
+
+def test_recipient_key_passphrase_encryption(tmp_path):
+    """Verify private keys are encrypted with passphrase at rest and rejected with bad passphrase."""
+    import pytest
+    from recipient_client.daemon.client_crypto import RecipientCryptoSession, MAGIC_ENC_HEADER
+
+    keys_dir = str(tmp_path / "enc_keys")
+    passphrase = "ClassifiedPassphrase2026!#"
+
+    # 1. Generate keys with passphrase
+    session = RecipientCryptoSession(
+        recipient_id="TEST_OFFICER",
+        keys_dir=keys_dir,
+        passphrase=passphrase
+    )
+    assert session.kem_sk is not None
+    assert session.dsa_sk is not None
+
+    # Check that disk files have the encrypted magic header
+    with open(session.kem_sk_path, "rb") as f:
+        kem_sk_raw = f.read()
+    assert kem_sk_raw.startswith(MAGIC_ENC_HEADER)
+
+    with open(session.dsa_sk_path, "rb") as f:
+        dsa_sk_raw = f.read()
+    assert dsa_sk_raw.startswith(MAGIC_ENC_HEADER)
+
+    # 2. Re-load with correct passphrase
+    session_reload = RecipientCryptoSession(
+        recipient_id="TEST_OFFICER",
+        keys_dir=keys_dir,
+        passphrase=passphrase
+    )
+    assert session_reload.kem_sk == session.kem_sk
+    assert session_reload.dsa_sk == session.dsa_sk
+
+    # 3. Re-load with incorrect passphrase must fail
+    with pytest.raises(ValueError, match="Invalid passphrase"):
+        RecipientCryptoSession(
+            recipient_id="TEST_OFFICER",
+            keys_dir=keys_dir,
+            passphrase="WrongPassword"
+        )
+
+    # 4. Re-load with no passphrase must prompt/fail
+    with pytest.raises(ValueError, match="Passphrase is required"):
+        RecipientCryptoSession(
+            recipient_id="TEST_OFFICER",
+            keys_dir=keys_dir,
+            passphrase=None
+        )
+

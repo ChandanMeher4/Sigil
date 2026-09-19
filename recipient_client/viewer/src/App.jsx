@@ -10,6 +10,10 @@ export default function App() {
   const [openModal, setOpenModal] = useState(false);
   const [activeDoc, setActiveDoc] = useState(null);
   const [containerPath, setContainerPath] = useState('data/alice/policy_directive_2026.sigil');
+  const [containerBytesB64, setContainerBytesB64] = useState(null);
+  const [selectedFileName, setSelectedFileName] = useState('');
+  const [passphrase, setPassphrase] = useState('');
+  const [recipientId, setRecipientId] = useState('ALICE');
   const [showCertificate, setShowCertificate] = useState(false);
   const [showForensicLens, setShowForensicLens] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -17,7 +21,7 @@ export default function App() {
   // Poll recipient daemon identity on load
   const fetchIdentity = async () => {
     try {
-      const res = await fetch(`${DAEMON_URL}/api/identity`);
+      const res = await fetch(`${DAEMON_URL}/api/identity?recipient_id=${encodeURIComponent(recipientId)}${passphrase ? `&passphrase=${encodeURIComponent(passphrase)}` : ''}`);
       if (res.ok) {
         const data = await res.json();
         setIdentity(data);
@@ -35,7 +39,20 @@ export default function App() {
     fetchIdentity();
     const interval = setInterval(fetchIdentity, 4000);
     return () => clearInterval(interval);
-  }, []);
+  }, [recipientId, passphrase]);
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setSelectedFileName(file.name);
+    setContainerPath(file.name);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const b64 = event.target.result.split(',')[1];
+      setContainerBytesB64(b64);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleOpenDocument = async () => {
     setLoading(true);
@@ -53,10 +70,20 @@ export default function App() {
     await new Promise((r) => setTimeout(r, 800));
 
     try {
+      const bodyPayload = {
+        recipient_id: recipientId,
+        passphrase: passphrase || undefined,
+      };
+      if (containerBytesB64) {
+        bodyPayload.container_bytes_b64 = containerBytesB64;
+      } else {
+        bodyPayload.container_path = containerPath;
+      }
+
       const res = await fetch(`${DAEMON_URL}/api/open_document`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ container_path: containerPath }),
+        body: JSON.stringify(bodyPayload),
       });
 
       if (!res.ok) {
@@ -176,11 +203,44 @@ export default function App() {
             </p>
 
             <div style={{ maxWidth: '500px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <label
+                  className="btn-secondary"
+                  style={{
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '10px 16px',
+                    fontSize: '13px',
+                    flex: '1',
+                    background: 'rgba(56, 189, 248, 0.1)',
+                    border: '1px solid rgba(56, 189, 248, 0.3)'
+                  }}
+                >
+                  📁 Browse .sigil File
+                  <input
+                    type="file"
+                    accept=".sigil"
+                    onChange={handleFileSelect}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+                {selectedFileName && (
+                  <span style={{ fontSize: '12px', color: '#38bdf8', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {selectedFileName}
+                  </span>
+                )}
+              </div>
+
               <input
                 type="text"
                 value={containerPath}
-                onChange={(e) => setContainerPath(e.target.value)}
-                placeholder="Path to .sigil container"
+                onChange={(e) => {
+                  setContainerPath(e.target.value);
+                  setContainerBytesB64(null);
+                }}
+                placeholder="Or specify file path (e.g. data/alice/policy_directive_2026.sigil)"
                 style={{
                   background: '#0a0f1d',
                   border: '1px solid rgba(255,255,255,0.15)',
@@ -191,6 +251,53 @@ export default function App() {
                   fontSize: '13px',
                 }}
               />
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', textAlign: 'left', fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
+                    Officer Identity
+                  </label>
+                  <input
+                    type="text"
+                    value={recipientId}
+                    onChange={(e) => setRecipientId(e.target.value.toUpperCase())}
+                    placeholder="ALICE"
+                    style={{
+                      width: '100%',
+                      background: '#0a0f1d',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      color: '#38bdf8',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      fontFamily: 'ui-monospace, monospace',
+                      fontSize: '13px',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', textAlign: 'left', fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
+                    Key Passphrase (if set)
+                  </label>
+                  <input
+                    type="password"
+                    value={passphrase}
+                    onChange={(e) => setPassphrase(e.target.value)}
+                    placeholder="Passphrase"
+                    style={{
+                      width: '100%',
+                      background: '#0a0f1d',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      color: '#fff',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+              </div>
 
               {errorMsg && (
                 <div style={{ color: '#fb7185', fontSize: '13px', background: 'rgba(244,63,94,0.1)', padding: '10px', borderRadius: '6px' }}>
