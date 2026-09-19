@@ -307,5 +307,17 @@ def list_blocks(limit: int = 50):
 console_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "audit_console", "dist"))
 if os.path.exists(console_dist):
     from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import RedirectResponse
+    
+    # Redirect root to /console
+    @app.get("/")
+    def redirect_root_to_console():
+        return RedirectResponse(url="/console/")
+        
     app.mount("/console", StaticFiles(directory=console_dist, html=True), name="console")
+    
+    # Also mount /assets directly at root as fallback
+    assets_dir = os.path.join(console_dist, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets_fallback")
 
