@@ -7,6 +7,7 @@ to the responsible recipient with mathematical false-accusation bounds.
 
 import math
 import hashlib
+import json
 from dataclasses import dataclass
 from typing import List, Dict, Any, Tuple, Optional
 
@@ -125,7 +126,47 @@ class ForensicAccuser:
                 expected_codeword=expected_cw
             ))
 
-        # Sort candidates descending by match count
+        # Deduplicate candidates by recipient_id, keeping the highest match score per recipient
+        recipient_best: Dict[str, CandidateScore] = {}
+        for cand in candidate_scores:
+            if cand.recipient_id not in recipient_best or cand.match_count > recipient_best[cand.recipient_id].match_count:
+                recipient_best[cand.recipient_id] = cand
+
+        # Also populate authorized recipients from the document's manifest if they didn't decrypt
+        authorized_recipients = []
+        with self.ledger._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT payload FROM entries WHERE entry_type = 'MANIFEST' AND payload LIKE ? ORDER BY rowid DESC LIMIT 1;",
+                (f'%"{doc_id}"%',)
+            )
+            mrow = cur.fetchone()
+            if mrow:
+                try:
+                    mpay = json.loads(mrow["payload"]) if isinstance(mrow["payload"], str) else mrow["payload"]
+                    authorized_recipients = mpay.get("authorized_recipients", [])
+                except Exception:
+                    pass
+
+        for auth_r in authorized_recipients:
+            if auth_r not in recipient_best:
+                # Innocent non-decrypting officer: pseudo expected codeword to measure random baseline
+                pseudo_h = hashlib.sha3_256(f"INNOCENT_{auth_r}_{doc_id}".encode()).digest()
+                exp_cw = generate_codeword_bits(self.wm_master_seed, pseudo_h, total_blocks)
+                m_count = sum(1 for j in range(total_blocks) if exp_cw[j] == recovered_cw[j])
+                pct = (m_count / total_blocks) * 100.0
+                recipient_best[auth_r] = CandidateScore(
+                    recipient_id=auth_r,
+                    session_entry_hash=pseudo_h.hex(),
+                    block_height=0,
+                    match_count=m_count,
+                    total_blocks=total_blocks,
+                    match_percentage=pct,
+                    expected_codeword=exp_cw
+                )
+
+        # Sort deduplicated candidates descending by match count
+        candidate_scores = list(recipient_best.values())
         candidate_scores.sort(key=lambda s: s.match_count, reverse=True)
         top_cand = candidate_scores[0]
         runner_up = candidate_scores[1] if len(candidate_scores) > 1 else None

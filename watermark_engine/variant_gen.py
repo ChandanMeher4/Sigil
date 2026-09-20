@@ -69,6 +69,6 @@ class VariantGenerator:
             full_page_stream = b"".join(page_stream_parts)
             doc.update_stream(xref, full_page_stream)
 
-        pdf_bytes = doc.tobytes(deflate=True, clean=True)
+        pdf_bytes = doc.tobytes(deflate=True, clean=False)
         doc.close()
         return pdf_bytes

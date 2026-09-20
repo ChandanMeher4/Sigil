@@ -15,7 +15,7 @@ export default function App() {
   const [containerBytesB64, setContainerBytesB64] = useState(null);
   const [selectedFileName, setSelectedFileName] = useState(urlParams?.get('file') ? initialFile.split(/[/\\]/).pop() : '');
   const [passphrase, setPassphrase] = useState('');
-  const [recipientId, setRecipientId] = useState('ALICE');
+  const [recipientId, setRecipientId] = useState('OFFICER_ALICE');
   const [showCertificate, setShowCertificate] = useState(false);
   const [showForensicLens, setShowForensicLens] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -113,6 +113,38 @@ export default function App() {
     }
   };
 
+  const handleDownloadFile = async () => {
+    if (!activeDoc) return;
+    try {
+      // 1. Ask local daemon to save directly to disk (bypasses native WebView2 download restrictions)
+      const saveResp = await fetch(`${DAEMON_URL}/api/document/${activeDoc.doc_id}/save_file?recipient_id=${encodeURIComponent(recipientId)}`, {
+        method: 'POST'
+      });
+      if (saveResp.ok) {
+        const data = await saveResp.json();
+        const pathsStr = data.saved_paths.join('\n');
+        alert(`✅ File saved successfully to:\n\n${pathsStr}`);
+        return;
+      }
+
+      // Fallback: browser blob download
+      const res = await fetch(`${DAEMON_URL}${activeDoc.render_url}`);
+      if (!res.ok) throw new Error('Failed to download file');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${recipientId}_${activeDoc.doc_id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Could not save file: ${err.message}`);
+    }
+  };
+
+
   return (
     <div id="root">
       {/* Top Header */}
@@ -178,6 +210,14 @@ export default function App() {
               </span>
             </div>
             <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                className="btn-secondary"
+                style={{ background: 'rgba(16, 185, 129, 0.2)', border: '1px solid #10b981', color: '#6ee7b7', fontWeight: 'bold' }}
+                onClick={handleDownloadFile}
+                title="Save the decrypted document to disk"
+              >
+                💾 Download File
+              </button>
               <button
                 className="btn-secondary"
                 onClick={() => setShowForensicLens(true)}
@@ -258,16 +298,14 @@ export default function App() {
                 }}
               />
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '12px' }}>
                 <div>
                   <label style={{ display: 'block', textAlign: 'left', fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
-                    Officer Identity
+                    Officer Identity (Recipient Clearance)
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={recipientId}
-                    onChange={(e) => setRecipientId(e.target.value.toUpperCase())}
-                    placeholder="ALICE"
+                    onChange={(e) => setRecipientId(e.target.value)}
                     style={{
                       width: '100%',
                       background: '#0a0f1d',
@@ -277,20 +315,26 @@ export default function App() {
                       borderRadius: '8px',
                       fontFamily: 'ui-monospace, monospace',
                       fontSize: '13px',
-                      boxSizing: 'border-box'
+                      boxSizing: 'border-box',
+                      cursor: 'pointer'
                     }}
-                  />
+                  >
+                    <option value="OFFICER_ALICE">OFFICER_ALICE (Special Ops Lead)</option>
+                    <option value="OFFICER_BOB">OFFICER_BOB (Intelligence Analyst)</option>
+                    <option value="OFFICER_CHARLIE">OFFICER_CHARLIE (Logistics Director)</option>
+                    <option value="OFFICER_DAVE">OFFICER_DAVE (Cyber Defense)</option>
+                  </select>
                 </div>
 
                 <div>
                   <label style={{ display: 'block', textAlign: 'left', fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
-                    Key Passphrase (if set)
+                    Key Passphrase <span style={{ color: '#64748b' }}>(optional)</span>
                   </label>
                   <input
                     type="password"
                     value={passphrase}
                     onChange={(e) => setPassphrase(e.target.value)}
-                    placeholder="Passphrase"
+                    placeholder="Leave blank if unencrypted key"
                     style={{
                       width: '100%',
                       background: '#0a0f1d',
@@ -376,6 +420,13 @@ export default function App() {
                   under Section 63 of Bharatiya Sakshya Adhiniyam, 2023.
                 </p>
                 <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <button 
+                    className="btn-secondary"
+                    style={{ background: 'rgba(16, 185, 129, 0.2)', border: '1px solid #10b981', color: '#6ee7b7', fontWeight: 'bold' }}
+                    onClick={handleDownloadFile}
+                  >
+                    💾 Download File
+                  </button>
                   <button className="btn-secondary" onClick={() => setActiveDoc(null)}>
                     📁 Open Another Document
                   </button>
@@ -489,7 +540,7 @@ export default function App() {
 
             <p style={{ fontSize: '12px', color: '#94a3b8' }}>
               Because your specific sequence of variants is locked into block #{activeDoc?.block_height},
-              any leak can be traced back in &lt; 1 second by the Forensic Lab verifier.
+              any unauthorized distribution can be traced back in &lt; 1 second by the Forensic Lab verifier.
             </p>
 
             <button className="btn-primary" onClick={() => setShowForensicLens(false)}>

@@ -204,13 +204,70 @@ def run_live_demonstration(keep_running: bool = False):
             res_b = json.loads(resp.read().decode("utf-8"))
             print_success(f"Officer Bob Enrolled on Ledger (Block #{res_b['block_height']})")
 
-        # Save Alice & Bob public keys in client keys directory for admin distribution
+        charlie_keys_dir = os.path.join(demo_dir, "charlie_keys")
+        charlie = RecipientCryptoSession(recipient_id="OFFICER_CHARLIE", keys_dir=charlie_keys_dir, passphrase="CharlieMasterPassphrase2026!")
+        charlie_enroll_p, charlie_enroll_sig = charlie.get_enroll_payload()
+
+        req_enr_c = urllib.request.Request(
+            "http://127.0.0.1:8001/api/enroll",
+            data=json.dumps({"payload": charlie_enroll_p, "signature_b64": charlie_enroll_sig}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req_enr_c, timeout=5.0) as resp:
+            res_c = json.loads(resp.read().decode("utf-8"))
+            print_success(f"Officer Charlie Enrolled on Ledger (Block #{res_c['block_height']})")
+
+        dave_keys_dir = os.path.join(demo_dir, "dave_keys")
+        dave = RecipientCryptoSession(recipient_id="OFFICER_DAVE", keys_dir=dave_keys_dir, passphrase="DaveMasterPassphrase2026!")
+        dave_enroll_p, dave_enroll_sig = dave.get_enroll_payload()
+
+        req_enr_d = urllib.request.Request(
+            "http://127.0.0.1:8001/api/enroll",
+            data=json.dumps({"payload": dave_enroll_p, "signature_b64": dave_enroll_sig}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req_enr_d, timeout=5.0) as resp:
+            res_d = json.loads(resp.read().decode("utf-8"))
+            print_success(f"Officer Dave Enrolled on Ledger (Block #{res_d['block_height']})")
+
+        # Save Alice, Bob, Charlie & Dave keys in client keys directory for admin distribution and local reader
         client_keys_dir = "data/client_keys"
         os.makedirs(client_keys_dir, exist_ok=True)
         with open(os.path.join(client_keys_dir, "OFFICER_ALICE_kem_pk.bin"), "wb") as f:
             f.write(alice.kem_pk)
+        with open(os.path.join(client_keys_dir, "OFFICER_ALICE_kem_sk.bin"), "wb") as f:
+            f.write(alice.kem_sk)
+        with open(os.path.join(client_keys_dir, "OFFICER_ALICE_dsa_pk.bin"), "wb") as f:
+            f.write(alice.dsa_pk)
+        with open(os.path.join(client_keys_dir, "OFFICER_ALICE_dsa_sk.bin"), "wb") as f:
+            f.write(alice.dsa_sk)
+
         with open(os.path.join(client_keys_dir, "OFFICER_BOB_kem_pk.bin"), "wb") as f:
             f.write(bob.kem_pk)
+        with open(os.path.join(client_keys_dir, "OFFICER_BOB_kem_sk.bin"), "wb") as f:
+            f.write(bob.kem_sk)
+        with open(os.path.join(client_keys_dir, "OFFICER_BOB_dsa_pk.bin"), "wb") as f:
+            f.write(bob.dsa_pk)
+        with open(os.path.join(client_keys_dir, "OFFICER_BOB_dsa_sk.bin"), "wb") as f:
+            f.write(bob.dsa_sk)
+
+        with open(os.path.join(client_keys_dir, "OFFICER_CHARLIE_kem_pk.bin"), "wb") as f:
+            f.write(charlie.kem_pk)
+        with open(os.path.join(client_keys_dir, "OFFICER_CHARLIE_kem_sk.bin"), "wb") as f:
+            f.write(charlie.kem_sk)
+        with open(os.path.join(client_keys_dir, "OFFICER_CHARLIE_dsa_pk.bin"), "wb") as f:
+            f.write(charlie.dsa_pk)
+        with open(os.path.join(client_keys_dir, "OFFICER_CHARLIE_dsa_sk.bin"), "wb") as f:
+            f.write(charlie.dsa_sk)
+
+        with open(os.path.join(client_keys_dir, "OFFICER_DAVE_kem_pk.bin"), "wb") as f:
+            f.write(dave.kem_pk)
+        with open(os.path.join(client_keys_dir, "OFFICER_DAVE_kem_sk.bin"), "wb") as f:
+            f.write(dave.kem_sk)
+        with open(os.path.join(client_keys_dir, "OFFICER_DAVE_dsa_pk.bin"), "wb") as f:
+            f.write(dave.dsa_pk)
+        with open(os.path.join(client_keys_dir, "OFFICER_DAVE_dsa_sk.bin"), "wb") as f:
+            f.write(dave.dsa_sk)
 
         # --------------------------------------------------------------------
         # 5. Distribute Classified Document via Admin API
@@ -269,7 +326,7 @@ def run_live_demonstration(keep_running: bool = False):
             f"--{boundary}\r\n"
             f'Content-Disposition: form-data; name="doc_id"\r\n\r\n{doc_id}\r\n'
             f"--{boundary}\r\n"
-            f'Content-Disposition: form-data; name="recipients"\r\n\r\nOFFICER_ALICE,OFFICER_BOB\r\n'
+            f'Content-Disposition: form-data; name="recipients"\r\n\r\nOFFICER_ALICE,OFFICER_BOB,OFFICER_CHARLIE,OFFICER_DAVE\r\n'
             f"--{boundary}\r\n"
             f'Content-Disposition: form-data; name="lines_per_block"\r\n\r\n1\r\n'
             f"--{boundary}\r\n"

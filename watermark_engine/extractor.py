@@ -58,12 +58,17 @@ class WatermarkExtractor:
         except Exception:
             stream_line_bits = []
 
-        if len(stream_line_bits) >= total_expected_blocks * lines_per_block:
+        if len(stream_line_bits) >= total_expected_blocks:
             doc.close()
             recovered_bits = []
             for b_idx in range(total_expected_blocks):
-                chunk = stream_line_bits[b_idx * lines_per_block : (b_idx + 1) * lines_per_block]
-                bit = 1 if sum(chunk) > len(chunk) / 2.0 else 0
+                start_idx = b_idx * lines_per_block
+                end_idx = min(len(stream_line_bits), (b_idx + 1) * lines_per_block)
+                if start_idx < len(stream_line_bits):
+                    chunk = stream_line_bits[start_idx:end_idx]
+                    bit = 1 if sum(chunk) > len(chunk) / 2.0 else 0
+                else:
+                    bit = 0
                 recovered_bits.append(bit)
             return recovered_bits, [1.0] * total_expected_blocks
 

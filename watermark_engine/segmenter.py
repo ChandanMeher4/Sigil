@@ -9,7 +9,7 @@ from typing import List, Dict, Any, Tuple
 import fitz  # PyMuPDF
 
 
-TW_BASELINE = 0.000  # Variant 0 (baseline word spacing)
+TW_BASELINE = 0.010  # Variant 0 (baseline word spacing, micro-offset to prevent stream optimizer strip)
 TW_OFFSET = 0.750    # Variant 1 (micro-adjusted word spacing, 0.75 pt)
 
 
@@ -35,6 +35,9 @@ class TextBlock:
 
 class PDFSegmenter:
     """Segments a PDF document into variation blocks with dual-variant content streams."""
+    TW_BASELINE = TW_BASELINE
+    TW_OFFSET = TW_OFFSET
+    TW_VARIANT_1 = TW_OFFSET
 
     @classmethod
     def segment_pdf(cls, pdf_path: str, lines_per_block: int = 3) -> Tuple[List[TextBlock], Dict[str, Any]]:

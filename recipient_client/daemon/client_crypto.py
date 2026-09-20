@@ -144,7 +144,11 @@ class RecipientCryptoSession:
                 break
 
         if not my_capsule:
-            raise PermissionError(f"Recipient '{self.recipient_id}' not authorized in this container")
+            auth_list = [c["recipient_id"] for c in capsules]
+            raise PermissionError(
+                f"Access Denied (403): Officer '{self.recipient_id}' is NOT an authorized recipient of this document. "
+                f"Authorized personnel: {', '.join(auth_list)}."
+            )
 
         # Decapsulate ML-KEM shared secret
         kem_ct = b64_decode(my_capsule["kem_ciphertext"])

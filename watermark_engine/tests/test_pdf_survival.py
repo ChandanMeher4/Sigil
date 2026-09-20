@@ -60,8 +60,8 @@ def test_pdf_segmentation(sample_pdf_path):
 
     for b in blocks:
         assert len(b.lines) == 3
-        assert b"0.000 Tw" in b.variant_0_stream
-        assert b"0.750 Tw" in b.variant_1_stream
+        assert f"{PDFSegmenter.TW_BASELINE:.3f} Tw".encode() in b.variant_0_stream
+        assert f"{PDFSegmenter.TW_VARIANT_1:.3f} Tw".encode() in b.variant_1_stream
 
 
 def test_watermark_assembly_and_extraction_roundtrip(sample_pdf_path, tmp_path):

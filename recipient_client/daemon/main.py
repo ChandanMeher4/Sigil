@@ -43,10 +43,7 @@ def get_recipient_session(recipient_id: Optional[str] = None, passphrase: Option
     """Retrieve or initialize a RecipientCryptoSession for the given identity and passphrase."""
     r_id = recipient_id or os.environ.get("SIGIL_RECIPIENT_ID", DEFAULT_RECIPIENT_ID)
     pw = passphrase or os.environ.get("SIGIL_KEY_PASSPHRASE", None)
-    cache_key = f"{r_id}:{pw or ''}"
-    if cache_key not in _session_cache:
-        _session_cache[cache_key] = RecipientCryptoSession(recipient_id=r_id, passphrase=pw)
-    return _session_cache[cache_key]
+    return RecipientCryptoSession(recipient_id=r_id, passphrase=pw)
 
 
 def get_configured_validator_nodes(custom_nodes: Optional[list] = None) -> List[str]:
@@ -291,6 +288,44 @@ def get_document_info(doc_id: str):
     if doc_id not in document_cache:
         raise HTTPException(status_code=404, detail="Document not open")
     return document_cache[doc_id]["commit_info"]
+
+
+@app.post("/api/document/{doc_id}/save_file")
+def save_document_to_disk(
+    doc_id: str,
+    recipient_id: Optional[str] = Query(None)
+):
+    """Save the decrypted watermarked PDF directly to Downloads and demo_data directories."""
+    if doc_id not in document_cache:
+        raise HTTPException(status_code=404, detail="Document not open or session expired")
+
+    pdf_bytes = document_cache[doc_id]["pdf_bytes"]
+    r_id = recipient_id or "UNKNOWN"
+    filename = f"{r_id}_{doc_id}.pdf"
+
+    saved_paths = []
+    # 1. Save to Downloads folder
+    downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+    if os.path.exists(downloads_dir):
+        dl_path = os.path.join(downloads_dir, filename)
+        with open(dl_path, "wb") as f:
+            f.write(pdf_bytes)
+        saved_paths.append(dl_path)
+
+    # 2. Save to project demo_data folder
+    demo_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "demo_data"))
+    if os.path.exists(demo_dir):
+        dd_path = os.path.join(demo_dir, filename)
+        with open(dd_path, "wb") as f:
+            f.write(pdf_bytes)
+        saved_paths.append(dd_path)
+
+    return {
+        "status": "SAVED",
+        "filename": filename,
+        "saved_paths": saved_paths,
+        "message": f"Successfully exported watermarked PDF ({len(pdf_bytes)} bytes)"
+    }
 
 
 # Mount static viewer dist for direct browser access at http://127.0.0.1:5001/

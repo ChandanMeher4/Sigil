@@ -12,6 +12,7 @@ export default function App() {
   });
 
   const [activeTab, setActiveTab] = useState('cluster');
+  const authToken = auth?.access_token || '';
   
   // Auth state
   const [loginUser, setLoginUser] = useState('officer_admin');
@@ -225,7 +226,7 @@ export default function App() {
   const handleForensicAttribute = async (e) => {
     e.preventDefault();
     if (!suspectFile) {
-      setForensicError('Please upload a suspect leaked PDF file for forensic analysis.');
+      setForensicError('Please upload a suspect PDF file for forensic analysis.');
       return;
     }
 
@@ -670,7 +671,7 @@ export default function App() {
                     onChange={(e) => setLinesPerBlock(parseInt(e.target.value) || 1)}
                   />
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '4px' }}>
-                    Recommended: 3 lines/block for optimal leak tracing SNR.
+                    Recommended: 3 lines/block for optimal forensic tracing SNR.
                   </div>
                 </div>
 
@@ -737,14 +738,14 @@ export default function App() {
         )}
 
         {/* ------------------------------------------------------------- */}
-        {/* TAB 3: FORENSIC LEAK ATTRIBUTION */}
+        {/* TAB 3: FORENSIC ATTRIBUTION */}
         {/* ------------------------------------------------------------- */}
         {activeTab === 'forensics' && (
           <div className="fade-in">
             <div className="glass-panel">
-              <h2 className="panel-title">Forensic Leak Attribution Laboratory</h2>
+              <h2 className="panel-title">Forensic Attribution Laboratory</h2>
               <p className="panel-description">
-                Extract imperceptible sub-millimeter word spacing shifts from a leaked suspect PDF and correlate against all ledger session entries.
+                Extract imperceptible sub-millimeter word spacing shifts from a suspect PDF and correlate against all ledger session entries.
               </p>
 
               {forensicError && (
@@ -764,7 +765,7 @@ export default function App() {
               <form onSubmit={handleForensicAttribute}>
                 {/* Upload Suspect PDF */}
                 <div className="form-group">
-                  <label className="form-label">1. Suspect Leaked Document / Photo Scan</label>
+                  <label className="form-label">1. Suspect Document / Photo Scan</label>
                   <input
                     type="file"
                     ref={forensicInputRef}
@@ -782,10 +783,10 @@ export default function App() {
                   >
                     <div className="dropzone-icon">🔍</div>
                     <div className="dropzone-text">
-                      {suspectFile ? suspectFile.name : 'Upload Suspect Leaked PDF File'}
+                      {suspectFile ? suspectFile.name : 'Upload Suspect PDF File'}
                     </div>
                     <div className="dropzone-hint">
-                      {suspectFile ? `${(suspectFile.size / 1024).toFixed(1)} KB • Ready for Tardos Extraction` : 'Upload PDF intercepted from external leak source'}
+                      {suspectFile ? `${(suspectFile.size / 1024).toFixed(1)} KB • Ready for Tardos Extraction` : 'Upload PDF recovered from external source'}
                     </div>
                   </div>
                 </div>
@@ -834,7 +835,7 @@ export default function App() {
                       <div className="verdict-icon">🚨</div>
                       <div style={{ flex: 1 }}>
                         <div className="verdict-title red">
-                          LEAK CONFIRMED: ATTRIBUTED TO {forensicResult.culprit}
+                          MATCH CONFIRMED: ATTRIBUTED TO {forensicResult.culprit}
                         </div>
                         <div className="verdict-sub">
                           {forensicResult.verdict}
@@ -909,7 +910,7 @@ export default function App() {
                     <div className="legal-body">
                       <div><strong>Ledger Block Height:</strong> #{forensicResult.blockHeight || 'N/A'}</div>
                       <div><strong>Session Entry Hash:</strong> <code style={{ fontFamily: 'var(--font-mono)' }}>{forensicResult.sessionEntryHash || 'N/A'}</code></div>
-                      <div><strong>Analyzed File SHA-256:</strong> <code style={{ fontFamily: 'var(--font-mono)' }}>{forensicResult.leaked_file_hash || 'N/A'}</code></div>
+                      <div><strong>Analyzed File SHA-256:</strong> <code style={{ fontFamily: 'var(--font-mono)' }}>{forensicResult.analyzed_file_hash || forensicResult.leaked_file_hash || 'N/A'}</code></div>
                       <div style={{ marginTop: '6px' }}><strong>Statutory Verdict:</strong> {forensicResult.legalValidity}</div>
                     </div>
                     <div style={{ marginTop: '12px', textAlign: 'right' }}>
