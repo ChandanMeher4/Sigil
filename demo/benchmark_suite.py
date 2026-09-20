@@ -17,6 +17,11 @@ import json
 import tempfile
 import fitz
 
+# Ensure repository root is on sys.path
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
 from crypto.pqc import MLKEM768, MLDSA65, b64_encode, b64_decode, canonical_json
 from crypto.shamir import ShamirSecretSharing
 from crypto.merkle import MerkleTree, verify_merkle_proof

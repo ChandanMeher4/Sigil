@@ -10,10 +10,14 @@ Proves:
 - The separation margin (> 10 sigma at scale) clearly isolates the traitor coalition.
 """
 
-import sys
 import os
+import sys
 import random
 import fitz
+
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
 
 from forensic_lab.accuse import ForensicAccuser
 from validator_node.ledger import Ledger

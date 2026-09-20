@@ -11,8 +11,14 @@ Proves:
 - The attacker is left with useless ciphertexts: "No log, no key."
 """
 
+import os
 import sys
 import json
+
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
 from crypto.pqc import b64_decode
 from recipient_client.daemon.client_crypto import RecipientCryptoSession
 
