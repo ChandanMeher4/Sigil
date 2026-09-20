@@ -271,6 +271,31 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  // Authenticated file download for .sigil containers
+  const handleDownloadSigil = async (downloadUrl, filename) => {
+    try {
+      const separator = downloadUrl.includes('?') ? '&' : '?';
+      const url = `${API_BASE}${downloadUrl}${separator}token=${encodeURIComponent(authToken || '')}`;
+      const res = await fetch(url, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
+      if (!res.ok) {
+        throw new Error(`Server returned HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = filename || 'document.sigil';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      alert(`Could not download container: ${err.message}`);
+    }
+  };
+
   // Render: Login Screen if unauthenticated
   if (!auth) {
     return (
@@ -678,10 +703,14 @@ export default function App() {
                       </div>
                     </div>
                     <a
-                      href={`${API_BASE}${distributeResult.download_url}`}
+                      href={`${API_BASE}${distributeResult.download_url}?token=${encodeURIComponent(authToken || '')}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleDownloadSigil(distributeResult.download_url, distributeResult.filename);
+                      }}
                       download={distributeResult.filename}
                       className="btn-primary"
-                      style={{ width: 'auto', padding: '10px 20px', background: 'var(--emerald)' }}
+                      style={{ width: 'auto', padding: '10px 20px', background: 'var(--emerald)', cursor: 'pointer' }}
                     >
                       ⬇ Download {distributeResult.filename}
                     </a>
@@ -951,9 +980,14 @@ export default function App() {
                         </td>
                         <td>
                           <a
-                            href={`${API_BASE}${doc.download_url}`}
+                            href={`${API_BASE}${doc.download_url}?token=${encodeURIComponent(authToken || '')}`}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              handleDownloadSigil(doc.download_url, doc.filename);
+                            }}
                             download={doc.filename}
                             className="action-link"
+                            style={{ cursor: 'pointer' }}
                           >
                             ⬇ Download .sigil
                           </a>

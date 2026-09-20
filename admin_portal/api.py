@@ -60,25 +60,32 @@ class LoginRequest(BaseModel):
 
 def get_current_officer(
     authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None),
     x_ssl_client_verify: Optional[str] = Header(None, alias="X-SSL-Client-Verify"),
     x_ssl_client_dn: Optional[str] = Header(None, alias="X-SSL-Client-DN"),
 ) -> Dict[str, Any]:
-    """Dependency: Validate Bearer session token or mTLS client certificate."""
+    """Dependency: Validate Bearer session token, query parameter token, or mTLS client certificate."""
     # 1. Check mTLS client certificate header from reverse proxy
     if x_ssl_client_verify == "SUCCESS" and x_ssl_client_dn:
         mtls_profile = authenticate_mtls(x_ssl_client_verify, x_ssl_client_dn)
         if mtls_profile:
             return mtls_profile
 
-    # 2. Check Bearer session token
-    if not authorization or not authorization.startswith("Bearer "):
+    # 2. Extract Bearer token from header or query parameter
+    raw_token = None
+    if authorization and authorization.startswith("Bearer "):
+        raw_token = authorization.split(" ")[1].strip()
+    elif token:
+        raw_token = token.strip()
+
+    if not raw_token:
         raise HTTPException(
             status_code=401,
             detail="Authentication required: missing or invalid Bearer token or mTLS certificate",
             headers={"WWW-Authenticate": "Bearer"}
         )
-    token = authorization.split(" ")[1].strip()
-    session = active_sessions.get(token)
+
+    session = active_sessions.get(raw_token)
     if not session:
         raise HTTPException(
             status_code=401,
@@ -293,12 +300,32 @@ async def distribute_document(
 @app.get("/api/admin/download/{doc_id}")
 def download_sigil_file(doc_id: str, officer: Dict[str, Any] = Depends(get_current_officer)):
     """Download the encrypted .sigil container file."""
-    file_path = os.path.join(DISTRIBUTED_DIR, f"{doc_id}.sigil")
-    if not os.path.exists(file_path):
+    candidates = [
+        os.path.join(DISTRIBUTED_DIR, f"{doc_id}.sigil"),
+        os.path.join(DISTRIBUTED_DIR, doc_id),
+        os.path.join("data", "distributed", f"{doc_id}.sigil"),
+        os.path.join("demo_data", "distributed", f"{doc_id}.sigil"),
+        os.path.join("demo_data", f"{doc_id}.sigil"),
+        os.path.join("data", f"{doc_id}.sigil"),
+    ]
+    if os.path.exists("demo_data"):
+        for entry in os.listdir("demo_data"):
+            if entry.startswith("live_demo_"):
+                candidates.append(os.path.join("demo_data", entry, "distributed", f"{doc_id}.sigil"))
+
+    file_path = None
+    for cand in candidates:
+        if os.path.exists(cand):
+            file_path = cand
+            break
+
+    if not file_path:
         raise HTTPException(status_code=404, detail=f"Container for {doc_id} not found.")
+
+    clean_filename = f"{doc_id}.sigil" if not doc_id.endswith(".sigil") else doc_id
     return FileResponse(
         path=file_path,
-        filename=f"{doc_id}.sigil",
+        filename=clean_filename,
         media_type="application/octet-stream"
     )
 
@@ -339,19 +366,30 @@ def list_enrolled_recipients(officer: Dict[str, Any] = Depends(get_current_offic
 def list_distributed_documents(officer: Dict[str, Any] = Depends(get_current_officer)):
     """List previously distributed .sigil containers."""
     documents = []
-    if os.path.exists(DISTRIBUTED_DIR):
-        for fname in os.listdir(DISTRIBUTED_DIR):
-            if fname.endswith(".sigil"):
-                fpath = os.path.join(DISTRIBUTED_DIR, fname)
-                st = os.stat(fpath)
-                doc_id = fname[:-6]
-                documents.append({
-                    "doc_id": doc_id,
-                    "filename": fname,
-                    "size_bytes": st.st_size,
-                    "created_at": st.st_mtime,
-                    "download_url": f"/api/admin/download/{doc_id}"
-                })
+    seen_ids = set()
+
+    search_dirs = [DISTRIBUTED_DIR, "data/distributed", "demo_data/distributed"]
+    if os.path.exists("demo_data"):
+        for entry in os.listdir("demo_data"):
+            if entry.startswith("live_demo_"):
+                search_dirs.append(os.path.join("demo_data", entry, "distributed"))
+
+    for s_dir in search_dirs:
+        if os.path.exists(s_dir):
+            for fname in os.listdir(s_dir):
+                if fname.endswith(".sigil"):
+                    doc_id = fname[:-6]
+                    if doc_id not in seen_ids:
+                        seen_ids.add(doc_id)
+                        fpath = os.path.join(s_dir, fname)
+                        st = os.stat(fpath)
+                        documents.append({
+                            "doc_id": doc_id,
+                            "filename": fname,
+                            "size_bytes": st.st_size,
+                            "created_at": st.st_mtime,
+                            "download_url": f"/api/admin/download/{doc_id}"
+                        })
 
     documents.sort(key=lambda d: d["created_at"], reverse=True)
     return {"documents": documents}

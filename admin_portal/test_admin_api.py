@@ -139,3 +139,43 @@ def test_static_frontend_dashboard_served(client):
     assert "root" in res.text
 
 
+def test_download_sigil_file_bearer_and_query_token(client, tmp_path, monkeypatch):
+    """Verify downloading .sigil container via Bearer token and query token."""
+    # Create a test container file
+    dist_dir = tmp_path / "distributed"
+    dist_dir.mkdir()
+    test_file = dist_dir / "TEST_DOC_99.sigil"
+    test_file.write_bytes(b"SIGIL_ENCRYPTED_CONTAINER_PAYLOAD_TEST")
+
+    from admin_portal import api
+    monkeypatch.setattr(api, "DISTRIBUTED_DIR", str(dist_dir))
+
+    # 1. Unauthenticated download rejected
+    res_unauth = client.get("/api/admin/download/TEST_DOC_99")
+    assert res_unauth.status_code == 401
+
+    # 2. Login to get token
+    login_res = client.post("/api/admin/login", json={
+        "username": DEFAULT_ADMIN_USER,
+        "password": DEFAULT_ADMIN_PASS
+    })
+    token = login_res.json()["access_token"]
+
+    # 3. Download via Authorization Header
+    res_header = client.get(
+        "/api/admin/download/TEST_DOC_99",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert res_header.status_code == 200
+    assert res_header.content == b"SIGIL_ENCRYPTED_CONTAINER_PAYLOAD_TEST"
+
+    # 4. Download via URL query parameter (?token=...)
+    res_query = client.get(f"/api/admin/download/TEST_DOC_99?token={token}")
+    assert res_query.status_code == 200
+    assert res_query.content == b"SIGIL_ENCRYPTED_CONTAINER_PAYLOAD_TEST"
+
+    # 5. Non-existent document returns 404
+    res_404 = client.get(f"/api/admin/download/NON_EXISTENT_DOC?token={token}")
+    assert res_404.status_code == 404
+
+

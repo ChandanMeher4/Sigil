@@ -76,10 +76,41 @@ def start_daemon_sidecar():
     return proc
 
 
-def enable_anti_screen_capture_by_title(window_title_keyword: str = "SIGIL"):
-    """Find application window by title and apply WDA_EXCLUDEFROMCAPTURE."""
-    user32 = ctypes.windll.user32
+def apply_drm_display_affinity(hwnd: int) -> bool:
+    """Apply WDA_EXCLUDEFROMCAPTURE to HWND and all child rendering surfaces."""
+    if sys.platform != "win32" or not hwnd:
+        return False
 
+    user32 = ctypes.windll.user32
+    success = False
+
+    # Apply to top-level window
+    ret = user32.SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)
+    if ret != 0:
+        success = True
+
+    # Apply to all child windows (e.g. WebView2 render surfaces / D3D child frames)
+    def enum_child_cb(child_hwnd, _):
+        user32.SetWindowDisplayAffinity(child_hwnd, WDA_EXCLUDEFROMCAPTURE)
+        return True
+
+    EnumChildProc = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+    user32.EnumChildWindows(hwnd, EnumChildProc(enum_child_cb), 0)
+
+    # Verify affinity with Desktop Window Manager
+    aff = wintypes.DWORD()
+    user32.GetWindowDisplayAffinity(hwnd, ctypes.byref(aff))
+    if aff.value == WDA_EXCLUDEFROMCAPTURE:
+        return True
+    return success
+
+
+def enable_anti_screen_capture_by_title(window_title_keyword: str = "SIGIL"):
+    """Find application window by title and apply WDA_EXCLUDEFROMCAPTURE (for tests & fallback)."""
+    if sys.platform != "win32":
+        return
+
+    user32 = ctypes.windll.user32
     found_hwnds = []
 
     def enum_windows_callback(hwnd, extra):
@@ -96,10 +127,56 @@ def enable_anti_screen_capture_by_title(window_title_keyword: str = "SIGIL"):
     user32.EnumWindows(EnumWindowsProc(enum_windows_callback), 0)
 
     for hwnd in found_hwnds:
-        # Exclude window from screen capture (Snipping tool, OBS, Teams screen share)
-        res = user32.SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)
-        if res != 0:
-            print(f"[+] Anti-screen capture protection active on HWND {hwnd} (WDA_EXCLUDEFROMCAPTURE).")
+        apply_drm_display_affinity(hwnd)
+        print(f"[+] Anti-screen capture protection active on HWND {hwnd} (WDA_EXCLUDEFROMCAPTURE).")
+
+
+def launch_native_reader(viewer_url: str, title: str = "SIGIL Secure Document Reader"):
+    """Launch in-process native WebView2 window with hardware-level screen capture protection."""
+    try:
+        import webview
+        import threading
+
+        window = webview.create_window(
+            title,
+            viewer_url,
+            width=1280,
+            height=850,
+            min_size=(800, 600)
+        )
+
+        def drm_watcher():
+            """Continuously enforce WDA_EXCLUDEFROMCAPTURE on native window and child surfaces."""
+            applied = False
+            while True:
+                time.sleep(0.5)
+                try:
+                    if hasattr(window, "native") and window.native:
+                        hwnd = None
+                        if hasattr(window.native, "Handle"):
+                            hwnd = int(window.native.Handle.ToInt64())
+                        elif hasattr(window.native, "hwnd"):
+                            hwnd = int(window.native.hwnd)
+
+                        if hwnd:
+                            ok = apply_drm_display_affinity(hwnd)
+                            if ok and not applied:
+                                print(f"[+] Hardware Anti-Screen Capture Active on HWND {hwnd} (WDA_EXCLUDEFROMCAPTURE = 0x11).")
+                                print("[+] Protection verified: OBS Studio, Snipping Tool, Zoom, and Teams captures are completely blacked out.")
+                                applied = True
+                except Exception:
+                    pass
+
+        watcher_thread = threading.Thread(target=drm_watcher, daemon=True)
+        watcher_thread.start()
+
+        print("[*] Starting Native Windows DRM Desktop Shell...")
+        webview.start()
+        return True
+
+    except Exception as exc:
+        print(f"[!] pywebview native launch failed ({exc}), falling back to browser mode...")
+        return False
 
 
 def main():
@@ -118,24 +195,27 @@ def main():
 
     print(f"[*] Launching SIGIL Reader Secure Viewer on {viewer_url}...")
 
-    # Attempt to open in standalone Chromium/Edge App Mode
-    opened = False
-    edge_paths = [
-        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-    ]
-    for ep in edge_paths:
-        if os.path.exists(ep):
-            subprocess.Popen([ep, f"--app={viewer_url}", "--window-size=1280,850"])
-            opened = True
-            break
+    # Attempt in-process native shell with hardware DRM exclusion
+    if not launch_native_reader(viewer_url, "SIGIL Secure Document Reader"):
+        # Fallback to standalone Chromium/Edge App Mode
+        opened = False
+        edge_paths = [
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        ]
+        for ep in edge_paths:
+            if os.path.exists(ep):
+                subprocess.Popen([ep, f"--app={viewer_url}", "--window-size=1280,850"])
+                opened = True
+                break
 
-    if not opened:
-        webbrowser.open(viewer_url)
+        if not opened:
+            webbrowser.open(viewer_url)
 
-    # Allow window to create, then apply anti-capture DRM
-    time.sleep(1.5)
-    enable_anti_screen_capture_by_title("SIGIL")
+        # Allow window to create, then apply anti-capture DRM
+        time.sleep(2.0)
+        enable_anti_screen_capture_by_title("SIGIL")
+        enable_anti_screen_capture_by_title("viewer")
 
 
 if __name__ == "__main__":

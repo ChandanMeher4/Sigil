@@ -9,14 +9,20 @@ export default function App() {
   const [currentStep, setCurrentStep] = useState(0);
   const [openModal, setOpenModal] = useState(false);
   const [activeDoc, setActiveDoc] = useState(null);
-  const [containerPath, setContainerPath] = useState('data/alice/policy_directive_2026.sigil');
+  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const initialFile = urlParams?.get('file') || 'data/alice/policy_directive_2026.sigil';
+  const [containerPath, setContainerPath] = useState(initialFile);
   const [containerBytesB64, setContainerBytesB64] = useState(null);
-  const [selectedFileName, setSelectedFileName] = useState('');
+  const [selectedFileName, setSelectedFileName] = useState(urlParams?.get('file') ? initialFile.split(/[/\\]/).pop() : '');
   const [passphrase, setPassphrase] = useState('');
   const [recipientId, setRecipientId] = useState('ALICE');
   const [showCertificate, setShowCertificate] = useState(false);
   const [showForensicLens, setShowForensicLens] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
+
+  useEffect(() => {
+    document.title = "SIGIL Secure Document Reader";
+  }, []);
 
   // Poll recipient daemon identity on load
   const fetchIdentity = async () => {

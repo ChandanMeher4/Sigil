@@ -49,3 +49,29 @@ def test_windows_drm_display_affinity():
 
     finally:
         root.destroy()
+
+
+def test_apply_drm_display_affinity_direct():
+    """Verify apply_drm_display_affinity directly protects HWND and children."""
+    import tkinter as tk
+    import ctypes
+    from ctypes import wintypes
+    from desktop.sigil_reader import WDA_EXCLUDEFROMCAPTURE, apply_drm_display_affinity
+
+    user32 = ctypes.windll.user32
+    root = tk.Tk()
+    root.title("SIGIL_DRM_DIRECT_TEST")
+    root.geometry("200x100")
+    root.update()
+
+    try:
+        hwnd = user32.FindWindowW(None, "SIGIL_DRM_DIRECT_TEST")
+        assert hwnd != 0
+        ok = apply_drm_display_affinity(hwnd)
+        assert ok is True
+
+        aff = wintypes.DWORD()
+        user32.GetWindowDisplayAffinity(hwnd, ctypes.byref(aff))
+        assert aff.value == WDA_EXCLUDEFROMCAPTURE
+    finally:
+        root.destroy()

@@ -37,6 +37,11 @@ def wait_for_node(url: str, timeout: float = 12.0) -> bool:
 
 def test_live_cluster_4node_bft_and_fault_tolerance(tmp_path):
     cluster_dir = str(tmp_path / "live_cluster_data")
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        if s.connect_ex(("127.0.0.1", 8001)) == 0:
+            pytest.skip("Cluster ports 8001-8004 are currently occupied by an active SIGIL cluster daemon.")
+
     os.makedirs(cluster_dir, exist_ok=True)
 
     processes = {}
