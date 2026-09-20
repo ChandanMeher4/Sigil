@@ -162,7 +162,7 @@ class Ledger:
             latest = self.get_latest_block()
             new_height = latest["height"] + 1
             prev_hash = bytes.fromhex(latest["block_hash"])
-            block_time = timestamp if timestamp is not None else int(time.time())
+            block_time = int(timestamp) if timestamp is not None else int(time.time())
 
             # Prepare canonical entry bytes and calculate entry hashes
             entry_records = []

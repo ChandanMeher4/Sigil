@@ -16,7 +16,7 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![NIST FIPS 203](https://img.shields.io/badge/NIST%20FIPS%20203-ML--KEM--768-success.svg)](https://csrc.nist.gov/pubs/fips/203/final)
 [![NIST FIPS 204](https://img.shields.io/badge/NIST%20FIPS%20204-ML--DSA--65-success.svg)](https://csrc.nist.gov/pubs/fips/204/final)
-[![Tests: 48/48 Passing](https://img.shields.io/badge/tests-48%2F48%20passing-brightgreen.svg)](file:///c:/Users/mchan/OneDrive/Desktop/Sigil)
+[![Tests: 53/53 Passing](https://img.shields.io/badge/tests-53%2F53%20passing-brightgreen.svg)](file:///c:/Users/mchan/OneDrive/Desktop/Sigil)
 [![Legal Compliance](https://img.shields.io/badge/BSA%202023-Section%2063%20Certificate-gold.svg)](https://www.indiacode.nic.in/)
 [![BFT Quorum](https://img.shields.io/badge/PQ--BFT-f%3D1%20Fault%20Tolerant-blueviolet.svg)](file:///c:/Users/mchan/OneDrive/Desktop/Sigil/validator_node)
 [![Zero-Cost](https://img.shields.io/badge/License-Zero--Cost%20Open%20Source-teal.svg)](file:///c:/Users/mchan/OneDrive/Desktop/Sigil)
@@ -386,13 +386,48 @@ pip install -r requirements.txt
 
 ---
 
-### 2. Running the Full Test Suite (48/48 Passing)
-Execute all 48 automated unit, cryptographic, consensus, forensic, and enterprise authentication tests:
+### ⚡ Unified Platform CLI (`sigil.py`)
+SIGIL includes a unified top-level command-line interface for one-command operations:
+
 ```powershell
-$env:PYTHONPATH="."
-python -m pytest -v
+# 1. Run all 48 automated tests:
+python sigil.py test
+
+# 2. Run cryptographic & imperceptibility benchmarks:
+python sigil.py benchmark
+
+# 3. Run autonomous 8-phase master evaluation demo:
+python sigil.py demo
+
+# 4. Launch live interactive 4-node cluster demo:
+python sigil.py demo --interactive --keep
+
+# 5. Verify Section 63 BSA evidence bundle offline:
+python sigil.py verify demo_data/EVIDENCE_BUNDLE.json
+
+# 6. Execute adversarial attack simulations:
+python sigil.py attack tamper       # Hostile DB tampering detection
+python sigil.py attack bypass       # Client logging bypass prevention
+python sigil.py attack collude      # 2-recipient splicing collusion detection
+
+# 7. Generate enterprise Root CA & mTLS certificates:
+python sigil.py pki --output-dir certs
+
+# 8. Start Security Officer Admin Console:
+python sigil.py admin --port 8000
+
+# 9. Launch Native Windows DRM Reader:
+python sigil.py reader demo_data/DEFENCE_DIRECTIVE_2026.sigil
 ```
-*Expected Output:* `============================= 48 passed in ~25s =============================`
+
+---
+
+### 2. Running the Full Test Suite (53/53 Passing)
+Execute all 53 automated unit, cryptographic, consensus, forensic, and enterprise authentication tests:
+```powershell
+pytest -v
+```
+*Expected Output:* `============================= 53 passed in ~26s =============================`
 
 ---
 

@@ -8,10 +8,15 @@ Designed for courtrooms, forensic investigators, and independent auditors:
 - Outputs Section 63 BSA Electronic Records Compliance Certificate
 """
 
+import os
 import sys
 import json
 import hashlib
 from typing import Dict, Any, Tuple, List
+
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
 
 from crypto.pqc import MLDSA65, canonical_json, b64_decode
 from crypto.merkle import verify_merkle_proof, hash_leaf

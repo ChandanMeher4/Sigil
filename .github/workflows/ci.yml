@@ -1,0 +1,80 @@
+name: SIGIL Enterprise CI
+
+on:
+  push:
+    branches: [ main, production ]
+  pull_request:
+    branches: [ main, production ]
+
+jobs:
+  test-python:
+    name: Pytest & Crypto Verification (${{ matrix.os }} - Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest ]
+        python-version: [ "3.11", "3.12" ]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Pytest Test Suite (53 automated tests)
+        run: |
+          pytest -v
+
+      - name: Verify Offline Evidence Verifier (Section 63 BSA)
+        run: |
+          python sigil.py verify demo_data/EVIDENCE_BUNDLE.json
+
+      - name: Execute Adversarial Tamper Attack Check
+        run: |
+          python sigil.py attack tamper
+
+      - name: Execute Client Bypass Attack Check
+        run: |
+          python sigil.py attack bypass
+
+      - name: Execute 2-Recipient Splicing Collusion Attack Check
+        run: |
+          python sigil.py attack collude
+
+      - name: Run Benchmark Suite
+        run: |
+          python sigil.py benchmark
+
+  build-frontends:
+    name: Vite Frontend Production Builds
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build Admin Portal Frontend
+        working-directory: admin_portal/frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build Recipient Client Viewer Frontend
+        working-directory: recipient_client/viewer
+        run: |
+          npm ci
+          npm run build
