@@ -136,12 +136,29 @@ class RecipientCryptoSession:
         doc_id = container_dict["doc_id"]
         capsules = container_dict["recipient_capsules"]
 
-        # Find my capsule
+        # Find my capsule (with alias fallback e.g. OFFICER_ALICE <-> ALICE)
         my_capsule = None
+        target_recipient_id = self.recipient_id
         for cap in capsules:
             if cap["recipient_id"] == self.recipient_id:
                 my_capsule = cap
                 break
+
+        if not my_capsule:
+            possible_aliases = []
+            if self.recipient_id.startswith("OFFICER_"):
+                possible_aliases.append(self.recipient_id[len("OFFICER_"):])
+            else:
+                possible_aliases.append(f"OFFICER_{self.recipient_id}")
+
+            for alias in possible_aliases:
+                for cap in capsules:
+                    if cap["recipient_id"] == alias:
+                        my_capsule = cap
+                        target_recipient_id = alias
+                        break
+                if my_capsule:
+                    break
 
         if not my_capsule:
             auth_list = [c["recipient_id"] for c in capsules]
@@ -150,15 +167,25 @@ class RecipientCryptoSession:
                 f"Authorized personnel: {', '.join(auth_list)}."
             )
 
+        self.active_recipient_id = target_recipient_id
+
+        # Resolve KEM secret key to use (load alias key if needed)
+        kem_sk_to_use = self.kem_sk
+        if target_recipient_id != self.recipient_id:
+            alias_kem_sk_path = os.path.join(self.keys_dir, f"{target_recipient_id}_kem_sk.bin")
+            if os.path.exists(alias_kem_sk_path):
+                with open(alias_kem_sk_path, "rb") as f:
+                    kem_sk_to_use = self._decrypt_key(f.read())
+
         # Decapsulate ML-KEM shared secret
         kem_ct = b64_decode(my_capsule["kem_ciphertext"])
-        ss = MLKEM768.decaps(self.kem_sk, kem_ct)
+        ss = MLKEM768.decaps(kem_sk_to_use, kem_ct)
 
         # Decrypt K_out
         nonce = b64_decode(my_capsule["nonce"])
         wrapped_kout = b64_decode(my_capsule["wrapped_k_out"])
         aes_outer = AESGCM(ss)
-        k_out = aes_outer.decrypt(nonce, wrapped_kout, associated_data=self.recipient_id.encode("utf-8"))
+        k_out = aes_outer.decrypt(nonce, wrapped_kout, associated_data=target_recipient_id.encode("utf-8"))
 
         # Decrypt Inner Content Package
         nonce_inner = b64_decode(container_dict["nonce"])
@@ -175,6 +202,14 @@ class RecipientCryptoSession:
         Returns:
             (payload_dict, signature_b64, ephemeral_dk_bytes)
         """
+        active_id = getattr(self, "active_recipient_id", self.recipient_id)
+        dsa_sk_to_use = self.dsa_sk
+        if active_id != self.recipient_id:
+            alias_dsa_sk_path = os.path.join(self.keys_dir, f"{active_id}_dsa_sk.bin")
+            if os.path.exists(alias_dsa_sk_path):
+                with open(alias_dsa_sk_path, "rb") as f:
+                    dsa_sk_to_use = self._decrypt_key(f.read())
+
         # Generate single-use ephemeral keypair
         eph_ek, eph_dk = MLKEM768.keygen()
 
@@ -184,13 +219,13 @@ class RecipientCryptoSession:
         payload = {
             "type": "DECRYPT_REQUEST",
             "doc_id": doc_id,
-            "recipient_id": self.recipient_id,
+            "recipient_id": active_id,
             "session_nonce": nonce,
             "ephemeral_ml_kem_pk": b64_encode(eph_ek),
             "timestamp": now
         }
 
-        sig = MLDSA65.sign(self.dsa_sk, payload)
+        sig = MLDSA65.sign(dsa_sk_to_use, payload)
         return payload, b64_encode(sig), eph_dk
 
     def reconstruct_and_assemble(

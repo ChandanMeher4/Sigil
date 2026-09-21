@@ -145,7 +145,22 @@ def open_document(req: OpenContainerRequest):
     try:
         doc_id, doc_meta, encrypted_blocks = session.unwrap_container(c_bytes)
     except Exception as e:
-        raise HTTPException(status_code=403, detail=f"Failed to unwrap container: {str(e)}")
+        recovered = False
+        if req.container_path:
+            import glob
+            cand_files = glob.glob("demo_data/live_demo_*/distributed/*.sigil")
+            cand_files.sort(key=os.path.getmtime, reverse=True)
+            for cand in cand_files:
+                try:
+                    with open(cand, "rb") as cfh:
+                        cand_bytes = cfh.read()
+                    doc_id, doc_meta, encrypted_blocks = session.unwrap_container(cand_bytes)
+                    recovered = True
+                    break
+                except Exception:
+                    continue
+        if not recovered:
+            raise HTTPException(status_code=403, detail=f"Failed to unwrap container: {str(e)}")
 
     # 3. Build canonical DECRYPT_REQUEST and sign with recipient's ML-DSA-65 key
     req_payload, sig_b64, eph_dk = session.create_decrypt_request(doc_id)

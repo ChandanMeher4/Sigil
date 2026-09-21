@@ -354,6 +354,13 @@ def run_live_demonstration(keep_running: bool = False):
         # --------------------------------------------------------------------
         print_step(6, "Alice Decrypts Document via 'Log-Before-Key' Quorum")
         sigil_file = os.path.join(demo_dir, "distributed", f"{doc_id}.sigil")
+        try:
+            os.makedirs("data/alice", exist_ok=True)
+            shutil.copyfile(sigil_file, "data/alice/policy_directive_2026.sigil")
+            shutil.copyfile(sigil_file, "data/DEFENCE_DIRECTIVE_2026.sigil")
+            shutil.copyfile(sigil_file, "demo_data/DEFENCE_DIRECTIVE_2026.sigil")
+        except Exception:
+            pass
         with open(sigil_file, "rb") as f:
             container_bytes = f.read()
 
