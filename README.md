@@ -16,7 +16,7 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![NIST FIPS 203](https://img.shields.io/badge/NIST%20FIPS%20203-ML--KEM--768-success.svg)](https://csrc.nist.gov/pubs/fips/203/final)
 [![NIST FIPS 204](https://img.shields.io/badge/NIST%20FIPS%20204-ML--DSA--65-success.svg)](https://csrc.nist.gov/pubs/fips/204/final)
-[![Tests: 53/53 Passing](https://img.shields.io/badge/tests-53%2F53%20passing-brightgreen.svg)](file:///c:/Users/mchan/OneDrive/Desktop/Sigil)
+[![Tests: 55/55 Passing](https://img.shields.io/badge/tests-55%2F55%20passing-brightgreen.svg)](file:///c:/Users/mchan/OneDrive/Desktop/Sigil)
 [![Legal Compliance](https://img.shields.io/badge/BSA%202023-Section%2063%20Certificate-gold.svg)](https://www.indiacode.nic.in/)
 [![BFT Quorum](https://img.shields.io/badge/PQ--BFT-f%3D1%20Fault%20Tolerant-blueviolet.svg)](file:///c:/Users/mchan/OneDrive/Desktop/Sigil/validator_node)
 [![Zero-Cost](https://img.shields.io/badge/License-Zero--Cost%20Open%20Source-teal.svg)](file:///c:/Users/mchan/OneDrive/Desktop/Sigil)
@@ -241,33 +241,27 @@ SIGIL provides three unified, defense-grade applications:
 
 ### 1. Security Officer Command Console (`http://localhost:8000/`)
 - **Location:** `admin_portal/` (FastAPI backend + React 19 / Vite frontend)
-- **Design System:** Bespoke obsidian defense aesthetic (`#0b0f19` dark canvas, cyan `#00e5ff` accents, glassmorphic cards, zero generic templates).
+- **Design System:** Institutional defense command console (`#070B12` midnight slate, cyan `#19C7E8` & emerald `#27C79A` accents, fixed 232px telemetry navigation, pure SVG military-grade iconography, zero generic templates or emojis).
 - **Core Operations:**
-  - **Live 4-Node BFT Cluster Health:** Real-time polling (3.5s interval) displaying node status, consensus index, live block heights, and cryptographic ledger hash parity across all peers.
-  - **Drag-and-Drop Document Distribution:** Security officers drag any classified PDF, select enrolled officer identities via interactive badge chips, and execute 1-click PQC packaging and threshold Shamir deposit over HTTP.
-  - **Visual Traitor Attribution Lab:** Upload any leaked PDF or document snippet intercepted in the wild. The lab calculates bitwise correlation across all enrolled personnel, plots suspect likelihoods in a high-visibility chart, isolates the traitor with Hoeffding confidence bounds ($P_{fa} \le 10^{-5}$), and prints the Section 63 BSA legal admissibility certificate.
-  - **Document Catalog:** View distributed directives, recipient counts, block sizes, and download `.sigil` containers.
+  - **Live 4-Node BFT Cluster Health:** Real-time polling displaying node status, consensus proposer index, live block heights, and cryptographic ledger hash continuity across all peers.
+  - **Classified Document Distribution:** Security officers upload classified PDFs, select enrolled clearance identities, configure block segmentation, and execute 1-click PQC packaging and threshold Shamir key deposit across the validator quorum over HTTP.
+  - **Forensic Attribution Laboratory:** Upload any suspect document or physical smartphone leak intercepted in the wild. The lab evaluates bitwise correlation against all committed ledger access sessions, plots candidates in a high-visibility correlation matrix, isolates the responsible party with Hoeffding confidence bounds ($P_{fa} \le 10^{-6}$), and exports legal Section 63 BSA evidence bundles.
+  - **Document Catalog & Ledger Monitor:** View distributed directives, block heights, and container sizes.
 
-### 2. Native Windows DRM Recipient Desktop Reader (`SigilReader.exe`)
-- **Location:** `desktop/sigil_reader.py` / `desktop/dist/SigilReader/`
+### 2. Recipient Secure Terminal (`http://localhost:5001/` & `SigilReader.exe`)
+- **Location:** `recipient_client/viewer/` & `desktop/sigil_reader.py`
 - **Features:**
-  - **Hardware Screen Capture Shield:** Invokes the Windows Win32 API `SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE = 0x11)`. All external screen recording tools (OBS Studio, Snipping Tool, Zoom, Teams, PrintScreen) record a solid black rectangle.
-  - **Passphrase-Protected PQC Key Storage:** Recipient ML-KEM/ML-DSA keys at rest are protected with PBKDF2-HMAC-SHA256 (100,000 rounds) and AES-256-GCM.
-  - **Native `.sigil` Container Shell Association:** Double-clicking any `.sigil` file opens the document directly in the secured viewer.
+  - **Hardware Screen Capture Shield:** Invokes the Windows Win32 API `SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE = 0x11)`. Screen capture, screenshot tools, and streaming apps (OBS Studio, Snipping Tool, Zoom, Teams, PrintScreen) record a solid black window.
+  - **Passphrase-Protected PQC Key Storage:** Recipient ML-KEM-768 and ML-DSA-65 keys at rest are protected with PBKDF2-HMAC-SHA256 (100,000 rounds) and AES-256-GCM.
+  - **Zero-Trust Log-Before-Key Pipeline:** Live 5-stage cryptographic progression monitoring outer envelope unwrap, ML-DSA request signing, BFT quorum commit, threshold Shamir reconstruction, and in-memory watermarked stream synthesis.
+  - **Forensic Watermark Lens:** Live inspection modal demonstrating the microscopic $+0.750\text{ pt}$ ($+0.26\text{ mm}$) inter-word spacing shift matrix.
+  - **Section 63 BSA Certificate Generator:** 1-click legal evidence certificate establishing mathematical chain-of-custody.
 
-### 3. Recipient Client Web Portal (`http://localhost:5001/`)
-- **Location:** `recipient_client/viewer/`
-- **Features:**
-  - Real-time cryptographic identity card: Recipient ID (`ALICE`), public key fingerprints, and daemon status.
-  - **"Log-Before-Key" 5-Stage Stepper:** Guides user visually through envelope unwrap, key generation, ledger signing, quorum consensus, and Lagrange reconstruction.
-  - **Floating Provenance HUD:** Displays committed block height, transaction entry hash, and Merkle root.
-  - **Interactive Forensic Lens:** Demonstrates microscopic $+0.750\text{ pt}$ typographic spacing shifts.
-
-### 4. Validator Cluster Audit Console (`http://localhost:8001/console`)
+### 3. Validator Cluster Audit Console (`http://localhost:8001/console`)
 - **Location:** `audit_console/`
 - **Features:**
   - **BFT Quorum Health Telemetry:** Real-time status, peer connectivity, and block heights.
-  - **Blockchain Ledger Explorer:** Search blocks, inspect raw JSON payloads, and verify Merkle audit paths.
+  - **Blockchain Ledger Explorer:** Search blocks, inspect raw RFC 8785 JSON payloads, and verify Merkle audit paths.
   - **Real-Time Tamper Alarm Banner:** Flashes high-visibility red warnings if an attacker tampers with SQLite records.
 
 ---

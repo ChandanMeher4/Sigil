@@ -1,16 +1,33 @@
-# React + Vite
+# SIGIL // BFT Validator Quorum Audit Console
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The **SIGIL Validator Quorum Audit Console** provides defense operators, compliance auditors, and system administrators with real-time insight into the Post-Quantum Byzantine Fault Tolerant (PQ-BFT) consensus cluster and immutable cryptographic ledger.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🔍 Features
 
-## React Compiler
+1. **BFT Quorum Health Telemetry**:
+   - Monitors all 4 validator nodes (ports 8001–8004).
+   - Displays consensus state, active round-robin proposer, block heights, and Merkle root continuity.
+2. **Blockchain Ledger Explorer**:
+   - Inspects blocks and entries stored in RFC 8785 Canonical JSON format.
+   - Verifies inclusion proofs using binary SHA3-256 Merkle trees with RFC 9162 domain separation (`0x00` leaves, `0x01` interior nodes).
+3. **Cryptographic Tamper Detection**:
+   - Verifies 4 layers of chain integrity:
+     1. Payload and signature hash match.
+     2. Merkle root reconstruction.
+     3. Canonical block header hash.
+     4. Cryptographic hash continuity (`prev_hash`).
+   - Flashes high-visibility security alerts if SQLite database records are tampered with.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the Oxlint configuration
+## 🚀 Running the Audit Console
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+```bash
+cd audit_console
+npm install
+npm run build    # Compiles to dist/ for static hosting
+```
+
+The compiled audit console can be accessed at `http://127.0.0.1:8001/console` or via the standalone Vite development server (`npm run dev`).

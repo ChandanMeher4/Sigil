@@ -46,22 +46,25 @@ What happens under the hood:
 
 ## 3. Recipient Officer Workflow: Opening a `.sigil` File
 
-### Step 1: Start the Recipient Client
-Launch the recipient daemon (or double-click `SigilReader.exe`):
+### Step 1: Start the Recipient Client or Native Reader
+Launch the recipient terminal via PowerShell or direct executable:
 ```powershell
+# Option A: Windows Native Reader with WDA_EXCLUDEFROMCAPTURE Hardware DRM
+.\run.ps1 -Mode reader -File "data/alice/policy_directive_2026.sigil"
+
+# Option B: Recipient Web Terminal (Local Daemon on Port 5001)
 $env:PYTHONPATH="."
-$env:SIGIL_RECIPIENT_ID="ALICE"
-$env:SIGIL_KEY_PASSPHRASE="OfficerPassphrase2026!#"
 python -m uvicorn recipient_client.daemon.main:app --host 127.0.0.1 --port 5001
 ```
+Open **`http://127.0.0.1:5001/`** in your browser to interact with the Recipient Secure Terminal.
 
 ### Step 2: Open and Authorize
-Open the document via the local viewer or API:
+Open the document via the Recipient Terminal web interface or API:
 ```powershell
 Invoke-RestMethod -Uri "http://127.0.0.1:5001/api/open_document" `
   -Method POST `
   -ContentType "application/json" `
-  -Body '{"container_path": "DEFENCE_DIRECTIVE_2026.sigil", "passphrase": "OfficerPassphrase2026!#"}'
+  -Body '{"container_path": "data/alice/policy_directive_2026.sigil", "recipient_id": "OFFICER_ALICE", "passphrase": ""}'
 ```
 
 What happens under the hood:
